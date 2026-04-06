@@ -4,6 +4,7 @@ Cargo.lock
 .DS_Store
 *.log
 auto-voice.exe
-*.md
 *.mp3
 models/
+*.py
+*.7z
