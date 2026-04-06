@@ -1,0 +1,66 @@
+[package]
+name = "auto-voice"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "auto-voice"
+path = "src/main.rs"
+
+[dependencies]
+clap        = { version = "4", features = ["derive"] }
+tokio       = { version = "1", features = ["full"] }
+anyhow      = "1"
+tracing     = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+toml        = "0.8"
+
+# 音频解码 (MP3/WAV/FLAC/OGG)
+symphonia = { version = "0.5", features = ["mp3", "aac", "flac", "ogg", "wav", "isomp4"] }
+
+# 重采样
+rubato = "0.15"
+
+# 麦克风采集 (Windows: WASAPI)
+cpal = "0.15"
+
+# HTTP 客户端 (LMStudio API)
+reqwest = { version = "0.12", features = ["json", "stream", "blocking"] }
+
+# 剪切板
+arboard = "3"
+
+# Ctrl+C 处理
+ctrlc = "3"
+
+# 日期时间
+chrono = { version = "0.4", features = ["clock"] }
+
+# CapsLock PTT: 全局键盘钩子 + Ctrl+V 模拟
+rdev  = "0.5"
+enigo = "0.2"
+
+# 系统托盘
+tray-icon = "0.17"
+
+# Windows 消息泵（托盘需要）
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_HiDpi",
+    "Win32_Graphics_Gdi",
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+] }
+
+# sherpa-onnx 官方 Rust crate，shared = 使用预编译 DLL
+sherpa-onnx = { version = "1", default-features = false }
+
+[profile.release]
+opt-level = 3        # 最高速度优化
+lto = "thin"         # 比 true (fat LTO) 快很多，体积接近
+codegen-units = 1    # 允许跨 crate 优化
+strip = true         # 剥离调试符号（Windows 上减少 30-50%）
+panic = "abort"      # 去掉 unwinding 代码（减少约 10%）

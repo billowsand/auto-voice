@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rustup target:*)",
+      "Bash(rustup show:*)",
+      "Bash(cmd.exe /c \"rustup target list --installed\")",
+      "Bash(powershell.exe -c \"rustup target list --installed\")",
+      "Bash(powershell.exe -c \"Get-Command rustup | Select-Object -ExpandProperty Source\")",
+      "Bash(powershell.exe -c \"rustup show\")",
+      "WebSearch",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:crates.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:k2-fsa.github.io)",
+      "Bash(cargo metadata:*)",
+      "Bash(python3 -c \"import sys,json; pkgs=json.load\\(sys.stdin\\)['packages']; [print\\(p['name'], p['version'], p['manifest_path']\\) for p in pkgs if 'sherpa' in p['name']]\")",
+      "mcp__web-reader__webReader"
+    ]
+  }
+}

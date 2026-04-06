@@ -1,0 +1,9 @@
+target/
+Cargo.lock
+*.pdb
+.DS_Store
+*.log
+auto-voice.exe
+*.md
+*.mp3
+models/
