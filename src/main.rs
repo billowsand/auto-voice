@@ -11,6 +11,8 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use reqwest::Client;
 
+#[cfg(windows)]
+const TRAY_CHILD_ENV: &str = "AUTO_VOICE_TRAY_CHILD";
 const DEFAULT_MODEL: &str = "models/sense-voice/model.int8.onnx";
 const DEFAULT_TOKENS: &str = "models/sense-voice/tokens.txt";
 const DEFAULT_FUNASR_ENCODER_ADAPTOR: &str = "models/funasr-nano/encoder_adaptor.int8.onnx";
@@ -277,6 +279,13 @@ async fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
+
+    #[cfg(windows)]
+    if cli.command.is_none() && std::env::var_os(TRAY_CHILD_ENV).is_none() {
+        relaunch_detached_tray_process()?;
+        return Ok(());
+    }
+
     let file_cfg = config::ConfigFile::load();
     let app = AppConfig::resolve(&cli, &file_cfg);
 
@@ -373,6 +382,27 @@ async fn main() -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+#[cfg(windows)]
+fn relaunch_detached_tray_process() -> Result<()> {
+    use std::os::windows::process::CommandExt;
+
+    const DETACHED_PROCESS: u32 = 0x0000_0008;
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    let mut cmd = std::process::Command::new(
+        std::env::current_exe().context("Failed to resolve current executable path")?,
+    );
+    cmd.args(std::env::args_os().skip(1))
+        .current_dir(std::env::current_dir().context("Failed to resolve current working directory")?)
+        .env(TRAY_CHILD_ENV, "1")
+        .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+
+    cmd.spawn()
+        .context("Failed to relaunch detached tray process")?;
     Ok(())
 }
 
