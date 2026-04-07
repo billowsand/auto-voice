@@ -8,3 +8,4 @@ auto-voice.exe
 models/
 *.py
 *.7z
+*.whl

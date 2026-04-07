@@ -17,8 +17,18 @@ serde       = { version = "1", features = ["derive"] }
 serde_json  = "1"
 toml        = "0.8"
 
-# 音频解码 (MP3/WAV/FLAC/OGG)
-symphonia = { version = "0.5", features = ["mp3", "aac", "flac", "ogg", "wav", "isomp4"] }
+# 音频解码 (MP3/WAV/FLAC/OGG/M4A/MKV/AIFF/…)
+symphonia = { version = "0.5", features = [
+    "mp3",    # MP3, MP2, MP1
+    "aac",    # AAC (裸流)
+    "flac",   # FLAC
+    "ogg",    # OGG Vorbis / OGG Opus / OGG FLAC
+    "wav",    # WAV / WAVE (PCM, IEEE Float)
+    "isomp4", # MP4 / M4A / M4B / AAC-in-MP4 / ALAC
+    "adpcm",  # ADPCM (微软 WAV 扩展)
+    "mkv",    # Matroska / WebM / MKA
+    "aiff",   # AIFF / AIFF-C
+] }
 
 # 重采样
 rubato = "0.15"
@@ -50,6 +60,7 @@ tray-icon = "0.17"
 windows-sys = { version = "0.59", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_HiDpi",
+    "Win32_UI_Shell",              # 拖放: DragAcceptFiles / DragQueryFileW / DragFinish
     "Win32_Graphics_Gdi",
     "Win32_Foundation",
     "Win32_System_LibraryLoader",
