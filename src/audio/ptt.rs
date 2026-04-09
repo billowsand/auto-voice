@@ -54,6 +54,8 @@ pub fn run_ptt(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
 
     // ── 音频 channel ─────────────────────────────────────────────────────────
     let (audio_tx, audio_rx) = mpsc::sync_channel::<Vec<f32>>(128);
+    // ── pending paste signal channel ───────────────────────────────────────
+    let (paste_tx, paste_rx) = mpsc::sync_channel::<()>(1);
 
     // ── rdev 全局键盘钩子（独立线程，listen() 永不返回）─────────────────────
     {
@@ -62,6 +64,7 @@ pub fn run_ptt(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
         let running = running.clone();
         let ptt_keys = ptt_keys.clone();
         let osd_kb = cfg.osd.clone();
+        let paste_tx = paste_tx.clone();
 
         std::thread::spawn(move || {
             rdev::listen(move |event| {
@@ -79,13 +82,20 @@ pub fn run_ptt(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
                 let all_held = ptt_keys.iter().all(|k| set.contains(k));
                 let was = recording.load(Ordering::SeqCst);
                 if all_held && !was {
-                    recording.store(true, Ordering::SeqCst);
-                    if !use_osd {
-                        eprint!("\r🔴 录音中...                    ");
-                    }
-                    if let Some(ref o) = osd_kb {
-                        o.set_level(0.0);
-                        o.set_recording();
+                    // 检查是否可以开始新录音（PROCESSING/DONE 时不允许）
+                    let can_start = osd_kb.as_ref().map_or(true, |o| o.can_recording_start());
+                    if can_start {
+                        recording.store(true, Ordering::SeqCst);
+                        if !use_osd {
+                            eprint!("\r🔴 录音中...                    ");
+                        }
+                        if let Some(ref o) = osd_kb {
+                            o.set_level(0.0);
+                            o.set_recording();
+                        }
+                    } else {
+                        // 不能开始新录音，标记 pending_paste
+                        let _ = paste_tx.try_send(());
                     }
                 } else if !all_held && was {
                     recording.store(false, Ordering::SeqCst);
@@ -133,13 +143,23 @@ pub fn run_ptt(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
     // ── 主循环 ────────────────────────────────────────────────────────────────
     let mut speech_buf: Vec<f32> = Vec::new();
     let mut was_recording = false;
+    let mut pending_paste = false; // 追踪是否需要处理（松键但可能被忽略）
 
     while running.load(Ordering::SeqCst) {
+        // 检查是否有 pending_paste 信号
+        while let Ok(()) = paste_rx.try_recv() {
+            pending_paste = true;
+        }
+
         let chunk = match audio_rx.recv_timeout(Duration::from_millis(50)) {
             Ok(c) => c,
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 let now_rec = recording.load(Ordering::SeqCst);
-                if was_recording && !now_rec && !speech_buf.is_empty() {
+
+                // 检查是否需要处理 speech_buf
+                // 两种情况：1. 正常松键 2. pending_paste（松键时被忽略，现在可以处理了）
+                if ((was_recording && !now_rec) || pending_paste) && !speech_buf.is_empty() {
+                    pending_paste = false;
                     if let Some(ref o) = cfg.osd {
                         o.set_level(0.0);
                     }
@@ -179,6 +199,20 @@ pub fn run_ptt(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
             if let Some(ref o) = cfg.osd {
                 o.set_done();
             }
+        } else if pending_paste && !speech_buf.is_empty() {
+            // 处理 pending 的 speech_buf（在 PROCESSING 期间用户又按下又松开）
+            if let Some(ref o) = cfg.osd {
+                o.set_level(0.0);
+            }
+            process_and_paste(&speech_buf, sample_rate, channels as u16, asr, cfg);
+            speech_buf.clear();
+            if !use_osd {
+                eprint!("\r✅ 已粘贴                       \n");
+            }
+            if let Some(ref o) = cfg.osd {
+                o.set_done();
+            }
+            pending_paste = false;
         }
 
         was_recording = now_rec;

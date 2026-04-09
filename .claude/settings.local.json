@@ -15,7 +15,25 @@
       "WebFetch(domain:k2-fsa.github.io)",
       "Bash(cargo metadata:*)",
       "Bash(python3 -c \"import sys,json; pkgs=json.load\\(sys.stdin\\)['packages']; [print\\(p['name'], p['version'], p['manifest_path']\\) for p in pkgs if 'sherpa' in p['name']]\")",
-      "mcp__web-reader__webReader"
+      "mcp__web-reader__webReader",
+      "Bash(cargo build:*)",
+      "mcp__zai-mcp-server__analyze_image",
+      "Bash(cargo check:*)",
+      "Bash(taskkill /F /IM auto-voice.exe)",
+      "Bash(taskkill //F //IM auto-voice.exe)",
+      "mcp__web-search-prime__web_search_prime",
+      "Bash(cargo run:*)",
+      "Bash(python3 -c \"from PIL import Image; img = Image.open\\('assets/osd_pill_base.tga'\\); print\\(f'TGA size: {img.size}'\\)\")",
+      "Bash(python -c \"from PIL import Image; img = Image.open\\('assets/osd_pill_base.tga'\\); print\\(f'TGA size: {img.size}'\\)\")",
+      "Bash(timeout 6 \"./target/release/auto-voice.exe\")",
+      "Bash(tee /tmp/osd_log2.txt)",
+      "Bash(tee /tmp/osd_log3.txt)",
+      "Bash(timeout 8 \"./target/release/auto-voice.exe\")",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(tasklist)",
+      "Bash(taskkill //F //PID 204896)",
+      "Bash(git reset:*)"
     ]
   }
 }

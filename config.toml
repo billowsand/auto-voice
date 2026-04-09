@@ -23,8 +23,8 @@ energy_threshold = 0.01
 vad_silence_ms   = 800
 lm_model = "gemma-4-e2b-it"
 ptt_key = "RightAlt"
-asr_backend = "funasr-nano"
-no_llm = true
+asr_backend = "sense-voice"
+no_llm = false
 
 # ── 同音字替换（专业词汇纠正）─────────────────────────────────────────────────
 # 启用后，ASR 识别结果会根据词典和 FST 规则自动替换同音专业词汇。

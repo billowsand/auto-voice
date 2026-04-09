@@ -126,6 +126,12 @@ mod windows_impl {
             post_state(STATE_HIDDEN);
         }
 
+        /// 检查是否可以开始新录音（在 PROCESSING/DONE 状态下返回 false）
+        pub fn can_recording_start(&self) -> bool {
+            let state = G_STATE.load(Ordering::SeqCst);
+            state == STATE_HIDDEN
+        }
+
         pub fn set_level(&self, level: f32) {
             let scaled = (level.clamp(0.0, 1.0) * 1000.0) as u32;
             G_LEVEL.store(scaled, Ordering::SeqCst);
