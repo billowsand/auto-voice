@@ -271,12 +271,27 @@ impl AppConfig {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // 日志文件路径
+    let log_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let log_file = log_dir.join("auto-voice.log");
+
+    let file_appender = tracing_appender::rolling::daily(log_dir, "auto-voice.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive(tracing::Level::INFO.into()),
         )
+        .with_writer(non_blocking)
+        .with_ansi(false)  // 文件中不输出 ANSI 颜色码
         .init();
+
+    tracing::info!("Log file: {:?}", log_file);
+    tracing::info!("auto-voice starting...");
 
     let cli = Cli::parse();
 
@@ -397,7 +412,9 @@ fn relaunch_detached_tray_process() -> Result<()> {
         std::env::current_exe().context("Failed to resolve current executable path")?,
     );
     cmd.args(std::env::args_os().skip(1))
-        .current_dir(std::env::current_dir().context("Failed to resolve current working directory")?)
+        .current_dir(
+            std::env::current_dir().context("Failed to resolve current working directory")?,
+        )
         .env(TRAY_CHILD_ENV, "1")
         .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
 
@@ -421,9 +438,10 @@ async fn cmd_transcribe(
     let out_path = output.unwrap_or_else(|| input.with_extension("md"));
 
     tracing::info!("Loading {} model...", app.asr_backend);
-    let engine = asr::AsrEngine::new(&app.build_asr_config(), Some(&app.build_hr_config())).context(
-        "Failed to load ASR model. Make sure model files exist (see --model / --asr-backend)",
-    )?;
+    let engine = asr::AsrEngine::new(&app.build_asr_config(), Some(&app.build_hr_config()))
+        .context(
+            "Failed to load ASR model. Make sure model files exist (see --model / --asr-backend)",
+        )?;
 
     tracing::info!("Decoding: {}", input.display());
     let decoded = audio::decode::decode_file(input)?;

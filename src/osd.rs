@@ -58,7 +58,7 @@ mod windows_impl {
 
     const BASE_PLATE_TGA: &[u8] = include_bytes!("../assets/osd_pill_base.tga");
 
-    // 基础窗口尺寸（96 DPI 时）
+    // 绘制坐标系基于原始设计尺寸
     const BASE_WIN_W: i32 = 360;
     const BASE_WIN_H: i32 = 80;
 
@@ -71,6 +71,10 @@ mod windows_impl {
         unsafe {
             GetDpiForSystem().max(96)
         }
+    }
+
+    fn get_window_dpi(hwnd: HWND) -> u32 {
+        unsafe { GetDpiForWindow(hwnd).max(96) }
     }
 
     const STATE_HIDDEN: u32 = 0;
@@ -256,12 +260,13 @@ mod windows_impl {
             // 获取系统 DPI 用于初始窗口创建
             let system_dpi = get_system_dpi();
             let scale = dpi_scale_factor(system_dpi);
-            tracing::info!("OSD system DPI: {}, scale: {}", system_dpi, scale);
+            tracing::info!("[OSD DPI] System DPI: {}, BASE: {}x{}, scale: {}",
+                system_dpi, BASE_WIN_W, BASE_WIN_H, scale);
 
             // DPI 缩放后的窗口尺寸
             let win_w = (BASE_WIN_W as f32 * scale) as i32;
             let win_h = (BASE_WIN_H as f32 * scale) as i32;
-            tracing::info!("OSD window size: {}x{}", win_w, win_h);
+            tracing::info!("[OSD DPI] Window pixel size: {}x{}", win_w, win_h);
 
             if win_w <= 0 || win_h <= 0 {
                 tracing::error!("Invalid OSD window size: {}x{}", win_w, win_h);
@@ -289,6 +294,11 @@ mod windows_impl {
             };
 
             tracing::info!("OSD window created: {:?}", hwnd);
+
+            // 验证窗口实际 DPI
+            let window_dpi = get_window_dpi(hwnd);
+            tracing::info!("[OSD DPI] Window actual DPI: {}, scale: {}",
+                window_dpi, dpi_scale_factor(window_dpi));
 
             let rgn = CreateRoundRectRgn(0, 0, win_w + 1, win_h + 1, win_h / 2, win_h / 2);
             let _ = SetWindowRgn(hwnd, rgn, true);
@@ -430,16 +440,19 @@ mod windows_impl {
             renderer.button_border_brush.SetColor(&theme.button_border);
             renderer.danger_face_brush.SetColor(&theme.danger_face);
 
-            // 缩放后的窗口像素尺寸
-            let scaled_w = BASE_WIN_W as f32 * scale;
-            let scaled_h = BASE_WIN_H as f32 * scale;
-
+            // 渲染目标坐标是 DIP（设备无关像素）
+            // pixelSize=540x120, dpiX/dpiY=144 意味着 DIP 尺寸 = 540/1.5 x 120/1.5 = 360x80
+            // 所以绘制坐标不应超过 DIP 范围: 0-360 宽, 0-80 高
+            // 但 baseplate 是 300x72 位图，绘制到 360x80 会变形
+            // 为了填充整个窗口（360x80 DIP），需要非均匀缩放
             let outer = D2D_RECT_F {
                 left: 0.0,
                 top: 0.0,
-                right: scaled_w,
-                bottom: scaled_h,
+                right: BASE_WIN_W as f32,  // 360 DIP
+                bottom: BASE_WIN_H as f32, // 80 DIP
             };
+            tracing::info!("[OSD DPI] DrawBitmap: base={}x{}, outer={}x{} DIP",
+                BASE_WIN_W, BASE_WIN_H, outer.right, outer.bottom);
             renderer.render_target.DrawBitmap(
                 &renderer.baseplate,
                 Some(&outer),
@@ -493,11 +506,13 @@ mod windows_impl {
         // 获取窗口实际 DPI（用于渲染缩放）
         let dpi = GetDpiForWindow(hwnd).max(96);
         let scale = dpi as f32 / 96.0;
-        tracing::info!("OSD renderer init: dpi={}, scale={}", dpi, scale);
+        tracing::info!("[OSD DPI] Renderer: dpi={}, scale={}, base={}x{}",
+            dpi, scale, BASE_WIN_W, BASE_WIN_H);
 
         // 计算缩放后的像素尺寸（用于窗口和渲染目标）
         let scaled_w = (BASE_WIN_W as f32 * scale) as u32;
         let scaled_h = (BASE_WIN_H as f32 * scale) as u32;
+        tracing::info!("[OSD DPI] RenderTarget pixel size: {}x{}, dpi={}", scaled_w, scaled_h, dpi);
 
         let render_props = D2D1_RENDER_TARGET_PROPERTIES {
             r#type: D2D1_RENDER_TARGET_TYPE_DEFAULT,
@@ -533,7 +548,7 @@ mod windows_impl {
             DWRITE_FONT_WEIGHT_MEDIUM,
             DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,
-            14.0 * scale,
+            14.0, // 字体大小是 DIP，DirectWrite 会自动按 render target DPI 缩放
             w!(""),
         )?;
         title_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)?;
@@ -545,7 +560,7 @@ mod windows_impl {
             DWRITE_FONT_WEIGHT_NORMAL,
             DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,
-            10.5 * scale,
+            10.5, // 字体大小是 DIP，DirectWrite 会自动按 render target DPI 缩放
             w!(""),
         )?;
         body_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)?;
@@ -620,9 +635,8 @@ mod windows_impl {
     }
 
     unsafe fn draw_status_lens(renderer: &Renderer, state: u32, frame: u32) {
-        let scale = renderer.dpi_scale;
-        // 缩放后的坐标
-        let center = D2D_POINT_2F { x: 36.0 * scale, y: 30.0 * scale };
+        // 坐标是 DIP（设计像素），Direct2D 根据 render target DPI 自动转换为物理像素
+        let center = D2D_POINT_2F { x: 36.0, y: 30.0 };
         let pulse = (frame as f32 * 0.12).sin() * 0.12 + 1.0;
 
         // Outer glow ring
@@ -633,33 +647,33 @@ mod windows_impl {
             _ => &renderer.track_glow_brush,
         };
         renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 18.0 * scale * pulse, 18.0 * scale * pulse),
+            &ellipse(center.x, center.y, 18.0 * pulse, 18.0 * pulse),
             outer_brush,
         );
 
         // Middle glow
         renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 13.0 * scale * pulse, 13.0 * scale * pulse),
+            &ellipse(center.x, center.y, 13.0 * pulse, 13.0 * pulse),
             &renderer.accent_soft_brush,
         );
 
         // Core ring
         renderer.render_target.DrawEllipse(
-            &ellipse(center.x, center.y, 9.0 * scale, 9.0 * scale),
+            &ellipse(center.x, center.y, 9.0, 9.0),
             &renderer.accent_brush,
-            2.0 * scale,
+            2.0,
             None,
         );
 
         // Inner fill
         renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 7.0 * scale, 7.0 * scale),
+            &ellipse(center.x, center.y, 7.0, 7.0),
             &renderer.accent_brush,
         );
 
         // Bright center dot
         renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 3.5 * scale, 3.5 * scale),
+            &ellipse(center.x, center.y, 3.5, 3.5),
             &renderer.title_brush,
         );
     }
@@ -697,13 +711,13 @@ mod windows_impl {
     }
 
     unsafe fn draw_signal_line(renderer: &Renderer, state: u32, frame: u32, level: f32) {
-        let scale = renderer.dpi_scale;
+        // 坐标是 DIP，Direct2D 自动转换为物理像素
         // 26 bars spanning x=58..178 (120 px) — left-shifted to sit beside status lens
         const BARS: usize = 26;
-        let left = 58.0_f32 * scale;
-        let baseline = 44.0_f32 * scale; // pushed up: bars grow upward from here, visually centered
-        let width = 120.0_f32 * scale;
-        let bar_width = 3.0_f32 * scale;
+        let left = 58.0_f32;
+        let baseline = 44.0_f32; // pushed up: bars grow upward from here, visually centered
+        let width = 120.0_f32;
+        let bar_width = 3.0_f32;
         let gap = (width - BARS as f32 * bar_width) / (BARS as f32 - 1.0);
         let time = frame as f32 * 0.15;
 
@@ -734,15 +748,15 @@ mod windows_impl {
                 _ => 0.0,
             };
 
-            let bar_height = norm * 24.0 * scale; // compact height, sits within upper half
+            let bar_height = norm * 24.0; // compact height, sits within upper half
             let top = baseline - bar_height;
 
             // Soft glow halo behind bar
             let shadow_rect = D2D_RECT_F {
-                left: x - 1.0 * scale,
-                top: top - 2.0 * scale,
-                right: x + bar_width + 1.0 * scale,
-                bottom: baseline + 2.0 * scale,
+                left: x - 1.0,
+                top: top - 2.0,
+                right: x + bar_width + 1.0,
+                bottom: baseline + 2.0,
             };
             renderer.render_target.FillRectangle(
                 &shadow_rect,
@@ -868,8 +882,7 @@ mod windows_impl {
     }
 
     unsafe fn draw_timer(renderer: &Renderer, elapsed_ms: u32) {
-        let scale = renderer.dpi_scale;
-        // 字体大小已在 create_renderer 中按 dpi_scale 缩放
+        // 坐标是 DIP，字体大小已在 create_renderer 中设置（按 dpi_scale 缩放后）
         let elapsed = format_mmss(elapsed_ms);
         let elapsed_wide: Vec<u16> = elapsed.encode_utf16().collect();
         // Waveform ends at x≈178; place timer immediately after with a small gap
@@ -877,10 +890,10 @@ mod windows_impl {
             &elapsed_wide,
             &renderer.title_format,
             &D2D_RECT_F {
-                left: 188.0 * scale,
-                top: 28.0 * scale,
-                right: 234.0 * scale,
-                bottom: 48.0 * scale,
+                left: 188.0,
+                top: 28.0,
+                right: 234.0,
+                bottom: 48.0,
             },
             &renderer.title_brush,
             Default::default(),
@@ -926,7 +939,10 @@ mod windows_impl {
         for px in bytes.chunks_exact_mut(4) {
             px.swap(0, 2);
         }
+        tracing::info!("[OSD DPI] Baseplate raw: {}x{}, BASE: {}x{}", width, height, BASE_WIN_W, BASE_WIN_H);
 
+        // bitmap dpi 设为 96，表示图片设计分辨率是 96 DPI
+        // Direct2D 会根据渲染目标 DPI 自动缩放
         let props = D2D1_BITMAP_PROPERTIES {
             pixelFormat: D2D1_PIXEL_FORMAT {
                 format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM,
