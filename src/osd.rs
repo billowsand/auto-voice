@@ -636,7 +636,8 @@ mod windows_impl {
 
     unsafe fn draw_status_lens(renderer: &Renderer, state: u32, frame: u32) {
         // 坐标是 DIP（设计像素），Direct2D 根据 render target DPI 自动转换为物理像素
-        let center = D2D_POINT_2F { x: 36.0, y: 30.0 };
+        // 布局：填满整个 360×80 窗口
+        let center = D2D_POINT_2F { x: 40.0, y: 40.0 }; // 居中偏左
         let pulse = (frame as f32 * 0.12).sin() * 0.12 + 1.0;
 
         // Outer glow ring
@@ -647,19 +648,19 @@ mod windows_impl {
             _ => &renderer.track_glow_brush,
         };
         renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 18.0 * pulse, 18.0 * pulse),
+            &ellipse(center.x, center.y, 20.0 * pulse, 20.0 * pulse),
             outer_brush,
         );
 
         // Middle glow
         renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 13.0 * pulse, 13.0 * pulse),
+            &ellipse(center.x, center.y, 14.0 * pulse, 14.0 * pulse),
             &renderer.accent_soft_brush,
         );
 
         // Core ring
         renderer.render_target.DrawEllipse(
-            &ellipse(center.x, center.y, 9.0, 9.0),
+            &ellipse(center.x, center.y, 10.0, 10.0),
             &renderer.accent_brush,
             2.0,
             None,
@@ -667,13 +668,13 @@ mod windows_impl {
 
         // Inner fill
         renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 7.0, 7.0),
+            &ellipse(center.x, center.y, 8.0, 8.0),
             &renderer.accent_brush,
         );
 
         // Bright center dot
         renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 3.5, 3.5),
+            &ellipse(center.x, center.y, 4.0, 4.0),
             &renderer.title_brush,
         );
     }
@@ -699,10 +700,10 @@ mod windows_impl {
             &label_wide,
             &renderer.title_format,
             &D2D_RECT_F {
-                left: 54.0,
-                top: 30.0,  // vertically aligned with lens center y=38
-                right: 100.0,
-                bottom: 48.0,
+                left: 62.0,  // 紧跟在状态灯（x=40，半径20）后面
+                top: 34.0,   // 与状态灯中心 y=40 对齐
+                right: 108.0,
+                bottom: 50.0,
             },
             label_brush,
             Default::default(),
@@ -712,14 +713,16 @@ mod windows_impl {
 
     unsafe fn draw_signal_line(renderer: &Renderer, state: u32, frame: u32, level: f32) {
         // 坐标是 DIP，Direct2D 自动转换为物理像素
-        // 26 bars spanning x=58..178 (120 px) — left-shifted to sit beside status lens
+        // 布局填满 360×80：状态灯在左，波形在中间，计时器在右
         const BARS: usize = 26;
-        let left = 58.0_f32;
-        let baseline = 44.0_f32; // pushed up: bars grow upward from here, visually centered
-        let width = 120.0_f32;
+        let left = 72.0_f32; // 状态灯右侧开始
+        let right = 292.0_f32; // 计时器左侧结束
+        let width = right - left;
+        let baseline = 40.0_f32; // 垂直居中
         let bar_width = 3.0_f32;
         let gap = (width - BARS as f32 * bar_width) / (BARS as f32 - 1.0);
         let time = frame as f32 * 0.15;
+        let max_bar_half = 16.0_f32; // 上下最大波动幅度
 
         for i in 0..BARS {
             let x = left + i as f32 * (bar_width + gap);
@@ -748,15 +751,17 @@ mod windows_impl {
                 _ => 0.0,
             };
 
-            let bar_height = norm * 24.0; // compact height, sits within upper half
-            let top = baseline - bar_height;
+            // 上下对称波动：以 baseline 为中心，上下各 half_height
+            let half_height = norm * max_bar_half;
+            let top = baseline - half_height;
+            let bottom = baseline + half_height;
 
-            // Soft glow halo behind bar
+            // Soft glow halo behind bar (上下扩展)
             let shadow_rect = D2D_RECT_F {
                 left: x - 1.0,
                 top: top - 2.0,
                 right: x + bar_width + 1.0,
-                bottom: baseline + 2.0,
+                bottom: bottom + 2.0,
             };
             renderer.render_target.FillRectangle(
                 &shadow_rect,
@@ -768,7 +773,7 @@ mod windows_impl {
                 left: x,
                 top,
                 right: x + bar_width,
-                bottom: baseline,
+                bottom,
             };
             renderer.render_target.FillRectangle(
                 &bar_rect,
@@ -883,17 +888,18 @@ mod windows_impl {
 
     unsafe fn draw_timer(renderer: &Renderer, elapsed_ms: u32) {
         // 坐标是 DIP，字体大小已在 create_renderer 中设置（按 dpi_scale 缩放后）
+        // 布局：填满 360×80，计时器在右下角
         let elapsed = format_mmss(elapsed_ms);
         let elapsed_wide: Vec<u16> = elapsed.encode_utf16().collect();
-        // Waveform ends at x≈178; place timer immediately after with a small gap
+        // 波形在 x=72..292，计时器放在 x=295..355（窗口最右侧）
         renderer.render_target.DrawText(
             &elapsed_wide,
             &renderer.title_format,
             &D2D_RECT_F {
-                left: 188.0,
+                left: 295.0,
                 top: 28.0,
-                right: 234.0,
-                bottom: 48.0,
+                right: 355.0,
+                bottom: 52.0,
             },
             &renderer.title_brush,
             Default::default(),
