@@ -31,14 +31,10 @@ mod windows_impl {
         D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_BITMAP_PROPERTIES, D2D1_ELLIPSE,
         D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_FEATURE_LEVEL_DEFAULT,
         D2D1_HWND_RENDER_TARGET_PROPERTIES, D2D1_PRESENT_OPTIONS_NONE,
-        D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_ROUNDED_RECT,
+        D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT,
     };
     use windows::Win32::Graphics::DirectWrite::{
-        DWriteCreateFactory, IDWriteFactory, IDWriteTextFormat, DWRITE_FACTORY_TYPE_SHARED,
-        DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_MEDIUM,
-        DWRITE_FONT_WEIGHT_NORMAL, DWRITE_MEASURING_MODE_NATURAL,
-        DWRITE_PARAGRAPH_ALIGNMENT_NEAR,
-        DWRITE_TEXT_ALIGNMENT_LEADING,
+        DWriteCreateFactory, IDWriteFactory, DWRITE_FACTORY_TYPE_SHARED,
     };
     use windows::Win32::Graphics::Gdi::{
         CreateRoundRectRgn, InvalidateRect, SetWindowRgn, ValidateRect,
@@ -213,8 +209,6 @@ mod windows_impl {
         target: ID2D1HwndRenderTarget,
         render_target: ID2D1RenderTarget,
         baseplate: ID2D1Bitmap,
-        title_format: IDWriteTextFormat,
-        body_format: IDWriteTextFormat,
         title_brush: ID2D1SolidColorBrush,
         subtitle_brush: ID2D1SolidColorBrush,
         border_outer_brush: ID2D1SolidColorBrush,
@@ -232,8 +226,6 @@ mod windows_impl {
         button_face_brush: ID2D1SolidColorBrush,
         button_border_brush: ID2D1SolidColorBrush,
         danger_face_brush: ID2D1SolidColorBrush,
-        waveform_brush: ID2D1SolidColorBrush,
-        waveform_soft_brush: ID2D1SolidColorBrush,
         dpi_scale: f32,
     }
 
@@ -507,7 +499,7 @@ mod windows_impl {
 
     unsafe fn create_renderer(hwnd: HWND) -> WinResult<Renderer> {
         let factory: ID2D1Factory = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None)?;
-        let dwrite_factory: IDWriteFactory = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
+        let _dwrite_factory: IDWriteFactory = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
 
         // 获取窗口实际 DPI（用于渲染缩放）
         let dpi = GetDpiForWindow(hwnd).max(96);
@@ -548,30 +540,6 @@ mod windows_impl {
         let baseplate = load_baseplate_bitmap(&render_target)?;
         tracing::info!("OSD baseplate loaded successfully");
 
-        let title_format = dwrite_factory.CreateTextFormat(
-            w!("Segoe UI Variable"),
-            None,
-            DWRITE_FONT_WEIGHT_MEDIUM,
-            DWRITE_FONT_STYLE_NORMAL,
-            DWRITE_FONT_STRETCH_NORMAL,
-            14.0, // 字体大小是 DIP，DirectWrite 会自动按 render target DPI 缩放
-            w!(""),
-        )?;
-        title_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)?;
-        title_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR)?;
-
-        let body_format = dwrite_factory.CreateTextFormat(
-            w!("Segoe UI Variable"),
-            None,
-            DWRITE_FONT_WEIGHT_NORMAL,
-            DWRITE_FONT_STYLE_NORMAL,
-            DWRITE_FONT_STRETCH_NORMAL,
-            10.5, // 字体大小是 DIP，DirectWrite 会自动按 render target DPI 缩放
-            w!(""),
-        )?;
-        body_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)?;
-        body_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR)?;
-
         let title_brush =
             render_target.CreateSolidColorBrush(&rgb(0.95, 0.96, 0.98, 0.94), None)?;
         let subtitle_brush =
@@ -605,18 +573,11 @@ mod windows_impl {
             render_target.CreateSolidColorBrush(&rgb(1.0, 1.0, 1.0, 0.14), None)?;
         let danger_face_brush =
             render_target.CreateSolidColorBrush(&rgb(0.44, 0.16, 0.18, 0.94), None)?;
-        // Fixed cyan-blue waveform color (matches reference design, independent of state accent)
-        let waveform_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.20, 0.65, 0.90, 1.0), None)?;
-        let waveform_soft_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.20, 0.65, 0.90, 0.22), None)?;
 
         Ok(Renderer {
             target,
             render_target,
             baseplate,
-            title_format,
-            body_format,
             title_brush,
             subtitle_brush,
             border_outer_brush,
@@ -634,8 +595,6 @@ mod windows_impl {
             button_face_brush,
             button_border_brush,
             danger_face_brush,
-            waveform_brush,
-            waveform_soft_brush,
             dpi_scale: scale,
         })
     }
@@ -682,38 +641,6 @@ mod windows_impl {
         renderer.render_target.FillEllipse(
             &ellipse(center.x, center.y, 2.0, 2.0),
             &renderer.title_brush,
-        );
-    }
-
-    unsafe fn draw_rec_label(renderer: &Renderer, state: u32) {
-        let label = match state {
-            STATE_RECORDING => "REC",
-            STATE_PROCESSING => "RUN",
-            STATE_DONE => "DONE",
-            _ => "LIVE",
-        };
-
-        // Choose brush color based on state
-        let label_brush = match state {
-            STATE_RECORDING => &renderer.accent_brush,
-            STATE_PROCESSING => &renderer.accent_brush,
-            STATE_DONE => &renderer.accent_brush,
-            _ => &renderer.title_brush,
-        };
-
-        let label_wide: Vec<u16> = label.encode_utf16().collect();
-        renderer.render_target.DrawText(
-            &label_wide,
-            &renderer.title_format,
-            &D2D_RECT_F {
-                left: 31.0,  // 紧跟在状态灯（x=20，半径10）后面
-                top: 17.0,   // 与状态灯中心 y=20 对齐
-                right: 54.0,
-                bottom: 25.0,
-            },
-            label_brush,
-            Default::default(),
-            DWRITE_MEASURING_MODE_NATURAL,
         );
     }
 
@@ -788,110 +715,6 @@ mod windows_impl {
         }
     }
 
-    unsafe fn draw_action_buttons(renderer: &Renderer, state: u32) {
-        let right_x = 296.0;
-        let top = 28.0;
-        let size = 24.0;
-
-        // Pause button background
-        let pause_rect = D2D_RECT_F {
-            left: right_x,
-            top,
-            right: right_x + size,
-            bottom: top + size,
-        };
-        renderer.render_target.FillRoundedRectangle(
-            &rounded_rect(pause_rect, 6.0),
-            &renderer.button_face_brush,
-        );
-        renderer.render_target.DrawRoundedRectangle(
-            &rounded_rect(pause_rect, 6.0),
-            &renderer.button_border_brush,
-            1.0,
-            None,
-        );
-
-        // Close button background
-        let close_rect = D2D_RECT_F {
-            left: right_x + 30.0,
-            top,
-            right: right_x + 30.0 + size,
-            bottom: top + size,
-        };
-        renderer.render_target.FillRoundedRectangle(
-            &rounded_rect(close_rect, 6.0),
-            &renderer.danger_face_brush,
-        );
-        renderer.render_target.DrawRoundedRectangle(
-            &rounded_rect(close_rect, 6.0),
-            &renderer.button_border_brush,
-            1.0,
-            None,
-        );
-
-        let icon_brush = if state == STATE_DONE {
-            &renderer.title_brush
-        } else {
-            &renderer.subtitle_brush
-        };
-
-        // Pause icon (two vertical bars)
-        renderer.render_target.DrawLine(
-            D2D_POINT_2F {
-                x: pause_rect.left + 8.0,
-                y: pause_rect.top + 7.0,
-            },
-            D2D_POINT_2F {
-                x: pause_rect.left + 8.0,
-                y: pause_rect.bottom - 7.0,
-            },
-            icon_brush,
-            2.0,
-            None,
-        );
-        renderer.render_target.DrawLine(
-            D2D_POINT_2F {
-                x: pause_rect.right - 8.0,
-                y: pause_rect.top + 7.0,
-            },
-            D2D_POINT_2F {
-                x: pause_rect.right - 8.0,
-                y: pause_rect.bottom - 7.0,
-            },
-            icon_brush,
-            2.0,
-            None,
-        );
-
-        // Close icon (X mark)
-        renderer.render_target.DrawLine(
-            D2D_POINT_2F {
-                x: close_rect.left + 8.0,
-                y: close_rect.top + 8.0,
-            },
-            D2D_POINT_2F {
-                x: close_rect.right - 8.0,
-                y: close_rect.bottom - 8.0,
-            },
-            &renderer.title_brush,
-            2.0,
-            None,
-        );
-        renderer.render_target.DrawLine(
-            D2D_POINT_2F {
-                x: close_rect.right - 8.0,
-                y: close_rect.top + 8.0,
-            },
-            D2D_POINT_2F {
-                x: close_rect.left + 8.0,
-                y: close_rect.bottom - 8.0,
-            },
-            &renderer.title_brush,
-            2.0,
-            None,
-        );
-    }
-
     unsafe fn draw_timer(_renderer: &Renderer, _elapsed_ms: u32) {
         // 不再显示计时器文字
     }
@@ -911,13 +734,6 @@ mod windows_impl {
             }
         }
         G_ELAPSED_MS.load(Ordering::SeqCst)
-    }
-
-    fn format_mmss(ms: u32) -> String {
-        let secs = ms / 1000;
-        let m = secs / 60;
-        let s = secs % 60;
-        format!("{m:02}:{s:02}")
     }
 
     fn load_baseplate_bitmap(render_target: &ID2D1RenderTarget) -> WinResult<ID2D1Bitmap> {
@@ -1040,14 +856,6 @@ mod windows_impl {
 
     fn rgb(r: f32, g: f32, b: f32, a: f32) -> D2D1_COLOR_F {
         D2D1_COLOR_F { r, g, b, a }
-    }
-
-    fn rounded_rect(rect: D2D_RECT_F, radius: f32) -> D2D1_ROUNDED_RECT {
-        D2D1_ROUNDED_RECT {
-            rect,
-            radiusX: radius,
-            radiusY: radius,
-        }
     }
 
     fn ellipse(x: f32, y: f32, rx: f32, ry: f32) -> D2D1_ELLIPSE {
