@@ -33,7 +33,9 @@
       "Bash(git commit -m ':*)",
       "Bash(tasklist)",
       "Bash(taskkill //F //PID 204896)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(cmd //c \"taskkill /F /IM auto-voice.exe\")",
+      "Bash(git commit:*)"
     ]
   }
 }
