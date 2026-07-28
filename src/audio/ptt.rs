@@ -27,9 +27,11 @@ pub fn run_ptt(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
         .default_input_device()
         .ok_or_else(|| anyhow::anyhow!("No input device found"))?;
 
-    let stream_config = device.default_input_config()?;
-    let sample_rate = stream_config.sample_rate().0;
-    let channels = stream_config.channels() as usize;
+    let supported_config = device.default_input_config()?;
+    let sample_rate = supported_config.sample_rate().0;
+    let channels = supported_config.channels() as usize;
+    // 只查询设备参数，不在这里打开输入流：麦克风按需开关（见主循环）。
+    let stream_config: cpal::StreamConfig = supported_config.into();
 
     tracing::info!(
         "PTT Mic: {} | {}Hz {}ch | 触发键: {}",
@@ -42,6 +44,7 @@ pub fn run_ptt(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
         "PTT 模式 — 按住 [{}] 开始录音，松开后自动识别并粘贴",
         ptt_spec
     );
+    println!("(麦克风仅在按住 [{}] 期间打开)", ptt_spec);
     println!("(Ctrl+C 退出)");
     let use_osd = cfg.osd.is_some();
 
@@ -126,21 +129,10 @@ pub fn run_ptt(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
         .ok();
     }
 
-    // ── CPAL 持续采集 ─────────────────────────────────────────────────────────
-    let stream = {
-        let err_fn = |e| tracing::error!("Audio stream error: {}", e);
-        device.build_input_stream(
-            &stream_config.into(),
-            move |data: &[f32], _| {
-                let _ = audio_tx.try_send(data.to_vec());
-            },
-            err_fn,
-            None,
-        )?
-    };
-    stream.play()?;
-
     // ── 主循环 ────────────────────────────────────────────────────────────────
+    // 麦克风句柄按需持有：按下 PTT 才创建输入流，松开立即 drop。
+    // 空闲时进程不占用录音设备，Windows 也不会显示"正在使用麦克风"。
+    let mut stream: Option<cpal::Stream> = None;
     let mut speech_buf: Vec<f32> = Vec::new();
     let mut was_recording = false;
     let mut pending_paste = false; // 追踪是否需要处理（松键但可能被忽略）
@@ -151,74 +143,105 @@ pub fn run_ptt(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
             pending_paste = true;
         }
 
-        let chunk = match audio_rx.recv_timeout(Duration::from_millis(50)) {
-            Ok(c) => c,
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                let now_rec = recording.load(Ordering::SeqCst);
-
-                // 检查是否需要处理 speech_buf
-                // 两种情况：1. 正常松键 2. pending_paste（松键时被忽略，现在可以处理了）
-                if ((was_recording && !now_rec) || pending_paste) && !speech_buf.is_empty() {
-                    pending_paste = false;
-                    if let Some(ref o) = cfg.osd {
-                        o.set_level(0.0);
-                    }
-                    process_and_paste(&speech_buf, sample_rate, channels as u16, asr, cfg);
-                    speech_buf.clear();
-                    if !use_osd {
-                        eprint!("\r✅ 已粘贴                       \n");
-                    }
-                    if let Some(ref o) = cfg.osd {
-                        o.set_done();
-                    }
-                }
-                was_recording = now_rec;
-                continue;
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => break,
-        };
-
         let now_rec = recording.load(Ordering::SeqCst);
-        let energy = rms_energy(&chunk, channels);
 
-        if now_rec {
-            if let Some(ref o) = cfg.osd {
-                o.set_level(normalize_osd_level(energy, cfg.energy_threshold));
-            }
-            speech_buf.extend_from_slice(&chunk);
-        } else if was_recording {
-            if let Some(ref o) = cfg.osd {
-                o.set_level(0.0);
-            }
-            speech_buf.extend_from_slice(&chunk);
-            process_and_paste(&speech_buf, sample_rate, channels as u16, asr, cfg);
+        // ① 按下 PTT → 打开麦克风
+        if now_rec && stream.is_none() {
+            // 丢弃上一轮遗留的音频，避免混入本次录音
+            while audio_rx.try_recv().is_ok() {}
             speech_buf.clear();
-            if !use_osd {
-                eprint!("\r✅ 已粘贴                       \n");
+
+            match open_mic(&device, &stream_config, audio_tx.clone()) {
+                Ok(s) => {
+                    tracing::info!("麦克风已打开");
+                    stream = Some(s);
+                }
+                Err(e) => {
+                    tracing::error!("打开麦克风失败: {}", e);
+                    recording.store(false, Ordering::SeqCst);
+                    if !use_osd {
+                        eprint!("\r❌ 麦克风打开失败              \n");
+                    }
+                    if let Some(ref o) = cfg.osd {
+                        o.hide();
+                    }
+                    was_recording = false;
+                    continue;
+                }
             }
-            if let Some(ref o) = cfg.osd {
-                o.set_done();
-            }
-        } else if pending_paste && !speech_buf.is_empty() {
-            // 处理 pending 的 speech_buf（在 PROCESSING 期间用户又按下又松开）
-            if let Some(ref o) = cfg.osd {
-                o.set_level(0.0);
-            }
-            process_and_paste(&speech_buf, sample_rate, channels as u16, asr, cfg);
-            speech_buf.clear();
-            if !use_osd {
-                eprint!("\r✅ 已粘贴                       \n");
-            }
-            if let Some(ref o) = cfg.osd {
-                o.set_done();
-            }
-            pending_paste = false;
         }
 
-        was_recording = now_rec;
+        // ② 录音中 → 收音 + 更新 OSD 电平
+        if now_rec {
+            match audio_rx.recv_timeout(Duration::from_millis(50)) {
+                Ok(chunk) => {
+                    if let Some(ref o) = cfg.osd {
+                        let energy = rms_energy(&chunk, channels);
+                        o.set_level(normalize_osd_level(energy, cfg.energy_threshold));
+                    }
+                    speech_buf.extend_from_slice(&chunk);
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+            was_recording = true;
+            continue;
+        }
+
+        // ③ 松开 PTT → 先关闭麦克风，再收回回调里已经送出的尾音
+        if let Some(s) = stream.take() {
+            drop(s);
+            tracing::info!("麦克风已关闭");
+            while let Ok(chunk) = audio_rx.try_recv() {
+                speech_buf.extend_from_slice(&chunk);
+            }
+            if let Some(ref o) = cfg.osd {
+                o.set_level(0.0);
+            }
+        }
+
+        // ④ 识别 + 粘贴
+        // 两种情况：1. 正常松键 2. pending_paste（松键时被忽略，现在可以处理了）
+        if (was_recording || pending_paste) && !speech_buf.is_empty() {
+            pending_paste = false;
+            was_recording = false;
+            process_and_paste(&speech_buf, sample_rate, channels as u16, asr, cfg);
+            speech_buf.clear();
+            if !use_osd {
+                eprint!("\r✅ 已粘贴                       \n");
+            }
+            if let Some(ref o) = cfg.osd {
+                o.set_done();
+            }
+            continue;
+        }
+
+        was_recording = false;
+        // 空闲：麦克风已关闭，此处只是等待下一次按键。
+        // 轮询间隔要短，否则会拖慢按下 PTT 到麦克风打开的响应。
+        std::thread::sleep(Duration::from_millis(10));
     }
 
     Ok(())
+}
+
+/// 创建并启动一路输入流。调用方 drop 返回值即关闭麦克风。
+fn open_mic(
+    device: &cpal::Device,
+    config: &cpal::StreamConfig,
+    tx: mpsc::SyncSender<Vec<f32>>,
+) -> Result<cpal::Stream> {
+    let err_fn = |e| tracing::error!("Audio stream error: {}", e);
+    let stream = device.build_input_stream(
+        config,
+        move |data: &[f32], _| {
+            let _ = tx.try_send(data.to_vec());
+        },
+        err_fn,
+        None,
+    )?;
+    stream.play()?;
+    Ok(stream)
 }
 
 fn rms_energy(samples: &[f32], channels: usize) -> f32 {
