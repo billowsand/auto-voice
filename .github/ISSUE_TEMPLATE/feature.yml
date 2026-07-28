@@ -1,0 +1,44 @@
+name: 功能建议
+description: 提议一个清晰、可验证的新能力
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 使用场景与问题
+      description: 当前工作流中遇到了什么问题？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 请描述期望的命令、配置或交互方式。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 已考虑的替代方案
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影响范围
+      options:
+        - PTT / 系统托盘 / OSD
+        - 音频解码或麦克风
+        - ASR 或说话人分离
+        - LLM 纠错或同音词替换
+        - CLI / 配置
+        - 文档 / 发布
+        - 其他
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已搜索现有 Issue，未发现相同建议。
+          required: true

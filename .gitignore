@@ -1,11 +1,13 @@
 target/
-Cargo.lock
 *.pdb
 .DS_Store
 *.log
+*.log.*
 auto-voice.exe
 *.mp3
 models/
 *.7z
 *.whl
 tools/.venv/
+.claude/settings.local.json
+.codex

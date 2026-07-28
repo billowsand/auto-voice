@@ -2,6 +2,23 @@
 name = "auto-voice"
 version = "0.1.0"
 edition = "2021"
+authors = ["billowsand"]
+description = "Windows 本地语音转文字工具，支持 PTT、音频文件转录、说话人分离和 LLM 文本纠错"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/billowsand/auto-voice"
+homepage = "https://github.com/billowsand/auto-voice"
+keywords = ["speech-to-text", "asr", "windows", "sensevoice", "sherpa-onnx"]
+categories = ["command-line-utilities", "multimedia::audio"]
+rust-version = "1.85"
+publish = false
+exclude = [
+    ".claude/",
+    ".github/",
+    ".codex",
+    "docs/assets/social-preview.png",
+    "tools/",
+]
 
 [[bin]]
 name = "auto-voice"

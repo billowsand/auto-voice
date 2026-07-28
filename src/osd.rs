@@ -1,9 +1,9 @@
-/// Win32 OSD — 浮于所有窗口上方的状态提示。
-///
-/// 这一版改成真正的胶囊外轮廓窗口，并把视觉拆成多层玻璃结构：
-/// - 外壳 / 内胆 / 顶部釉面 / 底部反射
-/// - 左侧状态透镜 + 右侧波形轨道
-/// - 保留轻量状态机：Hidden → Recording → Processing → Done(1.8s) → Hidden
+//! Win32 OSD — 浮于所有窗口上方的状态提示。
+//!
+//! 这一版改成真正的胶囊外轮廓窗口，并把视觉拆成多层玻璃结构：
+//! - 外壳 / 内胆 / 顶部釉面 / 底部反射
+//! - 左侧状态透镜 + 右侧波形轨道
+//! - 保留轻量状态机：Hidden → Recording → Processing → Done(1.8s) → Hidden
 
 #[cfg(windows)]
 pub use windows_impl::*;
@@ -41,13 +41,14 @@ mod windows_impl {
     };
     use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    use windows::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow, SetProcessDpiAwareness, PROCESS_PER_MONITOR_DPI_AWARE};
+    use windows::Win32::UI::HiDpi::{
+        GetDpiForSystem, GetDpiForWindow, SetProcessDpiAwareness, PROCESS_PER_MONITOR_DPI_AWARE,
+    };
     use windows::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW,
-        GetSystemMetrics, KillTimer, PostMessageW, RegisterClassExW, SetTimer,
-        SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_HREDRAW, CS_VREDRAW,
-        GWLP_USERDATA, HWND_TOPMOST, MSG, SM_CXSCREEN, SM_CYSCREEN,
-        SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNOACTIVATE,
+        CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetSystemMetrics,
+        KillTimer, PostMessageW, RegisterClassExW, SetTimer, SetWindowLongPtrW, SetWindowPos,
+        ShowWindow, CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, HWND_TOPMOST, MSG, SM_CXSCREEN,
+        SM_CYSCREEN, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNOACTIVATE,
         WM_DESTROY, WM_NCDESTROY, WM_PAINT, WM_TIMER, WNDCLASSEXW, WS_EX_NOACTIVATE,
         WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
     };
@@ -64,9 +65,7 @@ mod windows_impl {
 
     // 获取系统 DPI（用于初始窗口创建）
     fn get_system_dpi() -> u32 {
-        unsafe {
-            GetDpiForSystem().max(96)
-        }
+        unsafe { GetDpiForSystem().max(96) }
     }
 
     fn get_window_dpi(hwnd: HWND) -> u32 {
@@ -258,8 +257,13 @@ mod windows_impl {
             // 获取系统 DPI 用于初始窗口创建
             let system_dpi = get_system_dpi();
             let scale = dpi_scale_factor(system_dpi);
-            tracing::info!("[OSD DPI] System DPI: {}, BASE: {}x{}, scale: {}",
-                system_dpi, BASE_WIN_W, BASE_WIN_H, scale);
+            tracing::info!(
+                "[OSD DPI] System DPI: {}, BASE: {}x{}, scale: {}",
+                system_dpi,
+                BASE_WIN_W,
+                BASE_WIN_H,
+                scale
+            );
 
             // DPI 缩放后的窗口尺寸
             let win_w = (BASE_WIN_W as f32 * scale) as i32;
@@ -281,8 +285,14 @@ mod windows_impl {
                 w!("AutoVoiceOSD"),
                 w!("auto-voice"),
                 WS_POPUP,
-                x, y, win_w, win_h,
-                None, None, hinstance, None,
+                x,
+                y,
+                win_w,
+                win_h,
+                None,
+                None,
+                hinstance,
+                None,
             ) {
                 Ok(hwnd) => hwnd,
                 Err(e) => {
@@ -295,8 +305,11 @@ mod windows_impl {
 
             // 验证窗口实际 DPI
             let window_dpi = get_window_dpi(hwnd);
-            tracing::info!("[OSD DPI] Window actual DPI: {}, scale: {}",
-                window_dpi, dpi_scale_factor(window_dpi));
+            tracing::info!(
+                "[OSD DPI] Window actual DPI: {}, scale: {}",
+                window_dpi,
+                dpi_scale_factor(window_dpi)
+            );
 
             let rgn = CreateRoundRectRgn(0, 0, win_w + 1, win_h + 1, win_h / 2, win_h / 2);
             let _ = SetWindowRgn(hwnd, rgn, true);
@@ -407,7 +420,12 @@ mod windows_impl {
             let theme = theme_for_state(state);
             let scale = renderer.dpi_scale;
 
-            tracing::info!("OSD draw: state={}, scale={}, baseplate={:?}", state, scale, renderer.baseplate);
+            tracing::info!(
+                "OSD draw: state={}, scale={}, baseplate={:?}",
+                state,
+                scale,
+                renderer.baseplate
+            );
 
             renderer.target.BeginDraw();
             renderer
@@ -449,8 +467,13 @@ mod windows_impl {
                 right: BASE_WIN_W as f32,  // 360 DIP
                 bottom: BASE_WIN_H as f32, // 80 DIP
             };
-            tracing::info!("[OSD DPI] DrawBitmap: base={}x{}, outer={}x{} DIP",
-                BASE_WIN_W, BASE_WIN_H, outer.right, outer.bottom);
+            tracing::info!(
+                "[OSD DPI] DrawBitmap: base={}x{}, outer={}x{} DIP",
+                BASE_WIN_W,
+                BASE_WIN_H,
+                outer.right,
+                outer.bottom
+            );
             renderer.render_target.DrawBitmap(
                 &renderer.baseplate,
                 Some(&outer),
@@ -504,13 +527,23 @@ mod windows_impl {
         // 获取窗口实际 DPI（用于渲染缩放）
         let dpi = GetDpiForWindow(hwnd).max(96);
         let scale = dpi as f32 / 96.0;
-        tracing::info!("[OSD DPI] Renderer: dpi={}, scale={}, base={}x{}",
-            dpi, scale, BASE_WIN_W, BASE_WIN_H);
+        tracing::info!(
+            "[OSD DPI] Renderer: dpi={}, scale={}, base={}x{}",
+            dpi,
+            scale,
+            BASE_WIN_W,
+            BASE_WIN_H
+        );
 
         // 计算缩放后的像素尺寸（用于窗口和渲染目标）
         let scaled_w = (BASE_WIN_W as f32 * scale) as u32;
         let scaled_h = (BASE_WIN_H as f32 * scale) as u32;
-        tracing::info!("[OSD DPI] RenderTarget pixel size: {}x{}, dpi={}", scaled_w, scaled_h, dpi);
+        tracing::info!(
+            "[OSD DPI] RenderTarget pixel size: {}x{}, dpi={}",
+            scaled_w,
+            scaled_h,
+            dpi
+        );
 
         let render_props = D2D1_RENDER_TARGET_PROPERTIES {
             r#type: D2D1_RENDER_TARGET_TYPE_DEFAULT,
@@ -532,7 +565,11 @@ mod windows_impl {
             presentOptions: D2D1_PRESENT_OPTIONS_NONE,
         };
         let target = factory.CreateHwndRenderTarget(&render_props, &hwnd_props)?;
-        tracing::info!("OSD CreateHwndRenderTarget succeeded: {}x{}", scaled_w, scaled_h);
+        tracing::info!(
+            "OSD CreateHwndRenderTarget succeeded: {}x{}",
+            scaled_w,
+            scaled_h
+        );
         let render_target: ID2D1RenderTarget = target.cast()?;
         tracing::info!("OSD render_target cast succeeded");
 
@@ -664,14 +701,13 @@ mod windows_impl {
                 STATE_RECORDING => {
                     let env_main = gaussian(p, 0.30, 0.14) * 1.2;
                     let env_tail = gaussian(p, 0.60, 0.20) * 0.50;
-                    let env_end  = gaussian(p, 0.85, 0.09) * 0.18;
-                    let carrier  = (time + p * 12.0).sin() * 0.5 + 0.5;
-                    let shaped   = (carrier * 0.6 + 0.4).clamp(0.0, 1.0);
+                    let env_end = gaussian(p, 0.85, 0.09) * 0.18;
+                    let carrier = (time + p * 12.0).sin() * 0.5 + 0.5;
+                    let shaped = (carrier * 0.6 + 0.4).clamp(0.0, 1.0);
                     ((env_main + env_tail + env_end) * shaped * level.powf(0.70)).clamp(0.0, 1.0)
                 }
                 STATE_PROCESSING => {
-                    let env = gaussian(p, 0.35, 0.22) * 0.65
-                            + gaussian(p, 0.65, 0.16) * 0.40;
+                    let env = gaussian(p, 0.35, 0.22) * 0.65 + gaussian(p, 0.65, 0.16) * 0.40;
                     let carrier = ((time * 1.2 + p * 8.0).sin() * 0.5 + 0.5) * 0.70 + 0.30;
                     (env * carrier).clamp(0.0, 0.80)
                 }
@@ -696,10 +732,9 @@ mod windows_impl {
                 right: x + bar_width + 0.5,
                 bottom: bottom + 1.0,
             };
-            renderer.render_target.FillRectangle(
-                &shadow_rect,
-                &renderer.accent_soft_brush,
-            );
+            renderer
+                .render_target
+                .FillRectangle(&shadow_rect, &renderer.accent_soft_brush);
 
             // Main waveform bar — same accent color as status lens
             let bar_rect = D2D_RECT_F {
@@ -708,10 +743,9 @@ mod windows_impl {
                 right: x + bar_width,
                 bottom,
             };
-            renderer.render_target.FillRectangle(
-                &bar_rect,
-                &renderer.accent_brush,
-            );
+            renderer
+                .render_target
+                .FillRectangle(&bar_rect, &renderer.accent_brush);
         }
     }
 
@@ -750,7 +784,13 @@ mod windows_impl {
         for px in bytes.chunks_exact_mut(4) {
             px.swap(0, 2);
         }
-        tracing::info!("[OSD DPI] Baseplate raw: {}x{}, BASE: {}x{}", width, height, BASE_WIN_W, BASE_WIN_H);
+        tracing::info!(
+            "[OSD DPI] Baseplate raw: {}x{}, BASE: {}x{}",
+            width,
+            height,
+            BASE_WIN_W,
+            BASE_WIN_H
+        );
 
         // bitmap dpi 设为 96，表示图片设计分辨率是 96 DPI
         // Direct2D 会根据渲染目标 DPI 自动缩放

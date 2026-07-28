@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify:
+    name: Verify version
+    runs-on: windows-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Verify tag matches Cargo.toml
+        id: version
+        shell: pwsh
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          $tag = $env:REF_NAME
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Tag must use vX.Y.Z format; received '$tag'"
+          }
+          $cargo = Get-Content Cargo.toml -Raw
+          if ($cargo -notmatch '(?m)^version\s*=\s*"([^\"]+)"') {
+            throw "Unable to read package version from Cargo.toml"
+          }
+          $version = $Matches[1]
+          if ($tag -ne "v$version") {
+            throw "Tag '$tag' does not match Cargo.toml version '$version'"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+  build:
+    name: Build Windows package
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Quality gates
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets --all-features --locked -- -D warnings
+          cargo test --all-targets --all-features --locked
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Package and checksum
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          $package = "auto-voice-v$env:VERSION-windows-x86_64"
+          $dir = Join-Path dist $package
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item -Path target/release/auto-voice.exe, config.toml, README.md, LICENSE, CHANGELOG.md -Destination $dir
+          Compress-Archive -Path $dir -DestinationPath "dist/$package.zip" -CompressionLevel Optimal
+          $hash = (Get-FileHash "dist/$package.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $package.zip" | Set-Content -NoNewline -Encoding ascii "dist/$package.zip.sha256"
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-release
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name windows-release --dir dist
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --generate-notes \
+            --title "auto-voice $TAG"

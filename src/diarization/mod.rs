@@ -38,7 +38,6 @@ impl DiarizationEngine {
         let clustering = FastClusteringConfig {
             num_clusters: config.num_clusters.unwrap_or(-1),
             threshold: config.threshold,
-            ..Default::default()
         };
 
         let diarization = OfflineSpeakerDiarization::create(&OfflineSpeakerDiarizationConfig {
@@ -55,7 +54,6 @@ impl DiarizationEngine {
             clustering,
             min_duration_on: config.min_duration_on,
             min_duration_off: config.min_duration_off,
-            ..Default::default()
         })
         .context("Failed to create speaker diarization engine")?;
 

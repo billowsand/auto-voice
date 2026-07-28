@@ -2,7 +2,7 @@
 ///
 /// - 托盘图标常驻通知区域
 /// - 自动进入 PTT 模式（配置键触发录音）
-/// - 右下角浮动窗口：拖入音频文件 → 自动打开终端转录（含说话人分离）
+/// - 录音状态 OSD
 /// - 右键菜单 → 退出
 use anyhow::Result;
 use std::time::Duration;
@@ -19,7 +19,9 @@ use crate::osd;
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::HWND;
 #[cfg(windows)]
-use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, PeekMessageW, TranslateMessage, DispatchMessageW, MSG, SW_HIDE, WM_QUIT, PM_REMOVE};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    DispatchMessageW, FindWindowW, PeekMessageW, TranslateMessage, MSG, PM_REMOVE, SW_HIDE, WM_QUIT,
+};
 
 pub struct TrayConfig {
     pub live_cfg: LiveConfig,
@@ -46,7 +48,7 @@ pub fn run_tray(cfg: TrayConfig) -> Result<()> {
     let _tray = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_tooltip(format!(
-            "auto-voice  |  按住 [{}] 讲话，松开后自动粘贴  |  拖入音频文件即可转录",
+            "auto-voice  |  按住 [{}] 讲话，松开后自动粘贴",
             ptt_key_label
         ))
         .with_icon(icon)

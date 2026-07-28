@@ -86,7 +86,7 @@ pub fn run_ptt(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
                 let was = recording.load(Ordering::SeqCst);
                 if all_held && !was {
                     // 检查是否可以开始新录音（PROCESSING/DONE 时不允许）
-                    let can_start = osd_kb.as_ref().map_or(true, |o| o.can_recording_start());
+                    let can_start = osd_kb.as_ref().is_none_or(|o| o.can_recording_start());
                     if can_start {
                         recording.store(true, Ordering::SeqCst);
                         if !use_osd {

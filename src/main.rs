@@ -287,7 +287,7 @@ async fn main() -> Result<()> {
                 .add_directive(tracing::Level::INFO.into()),
         )
         .with_writer(non_blocking)
-        .with_ansi(false)  // 文件中不输出 ANSI 颜色码
+        .with_ansi(false) // 文件中不输出 ANSI 颜色码
         .init();
 
     tracing::info!("Log file: {:?}", log_file);
@@ -425,6 +425,7 @@ fn relaunch_detached_tray_process() -> Result<()> {
 
 // ── transcribe command ───────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 async fn cmd_transcribe(
     app: &AppConfig,
     input: &std::path::Path,

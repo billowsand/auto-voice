@@ -1,0 +1,61 @@
+name: Bug 报告
+description: 报告可稳定复现的问题
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: 感谢你帮助改进 auto-voice。安全漏洞请使用 Security Advisory 私下报告。
+  - type: input
+    id: version
+    attributes:
+      label: auto-voice 版本
+      placeholder: v0.1.0 或 commit SHA
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows 版本
+      placeholder: Windows 11 24H2 x64
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 请提供最小、明确的操作步骤和命令。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为与日志
+      description: 请删除录音内容、路径、密钥等敏感信息。
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: ASR 后端
+      options:
+        - sense-voice
+        - funasr-nano
+        - 不适用
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已搜索现有 Issue，未发现重复报告。
+          required: true
+        - label: 我未在报告中附加敏感录音、密钥或隐私数据。
+          required: true
