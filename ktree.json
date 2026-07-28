@@ -1,0 +1,2360 @@
+{
+  "sha": "d1e6e2fc606df37220d839b6b8e165f0dc22f53a",
+  "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/d1e6e2fc606df37220d839b6b8e165f0dc22f53a",
+  "tree": [
+    {
+      "path": ".clang-format",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c65e7720f439678df87df81ef18b92ce8a32941b",
+      "size": 180,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/c65e7720f439678df87df81ef18b92ce8a32941b"
+    },
+    {
+      "path": ".flake8",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ed38850ca24002761df4d7301ea2bac611694df0",
+      "size": 182,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/ed38850ca24002761df4d7301ea2bac611694df0"
+    },
+    {
+      "path": ".github",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "1a313f4d8cfec1fda36c616ec070a2165e8a1614",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/1a313f4d8cfec1fda36c616ec070a2165e8a1614"
+    },
+    {
+      "path": ".github/workflows",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "b14d80696e8593327d6318137b44040ae51d8237",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/b14d80696e8593327d6318137b44040ae51d8237"
+    },
+    {
+      "path": ".github/workflows/build-doc.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b271b144af35b7c6d4774803e1014b663dfed18c",
+      "size": 2661,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b271b144af35b7c6d4774803e1014b663dfed18c"
+    },
+    {
+      "path": ".github/workflows/build-pip.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cd79305c7ac299c264c658f9b11d89ac21d1e543",
+      "size": 1876,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/cd79305c7ac299c264c658f9b11d89ac21d1e543"
+    },
+    {
+      "path": ".github/workflows/build-wheels-aarch64.yaml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8b4b3d8c37a399fb3f4741ffc0485a696dda4be3",
+      "size": 1475,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/8b4b3d8c37a399fb3f4741ffc0485a696dda4be3"
+    },
+    {
+      "path": ".github/workflows/build-wheels-linux.yaml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "682f21e8c295515264ed2622b894737df63992e8",
+      "size": 1939,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/682f21e8c295515264ed2622b894737df63992e8"
+    },
+    {
+      "path": ".github/workflows/build-wheels-macos.yaml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "49d4c0d573eca54ad2fc2732c04ac1f07de63477",
+      "size": 1591,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/49d4c0d573eca54ad2fc2732c04ac1f07de63477"
+    },
+    {
+      "path": ".github/workflows/build-wheels-win32.yaml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6190e680967fcc2bbe625d35ff19d8d3db0ac1c7",
+      "size": 1462,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/6190e680967fcc2bbe625d35ff19d8d3db0ac1c7"
+    },
+    {
+      "path": ".github/workflows/build-wheels-win64.yaml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "22daa54d3d815752ba272a6eff94dbd02160545c",
+      "size": 1599,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/22daa54d3d815752ba272a6eff94dbd02160545c"
+    },
+    {
+      "path": ".github/workflows/build-windows.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b606e0ee8e14a3c7e7b283730067d908fa1cc105",
+      "size": 2623,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b606e0ee8e14a3c7e7b283730067d908fa1cc105"
+    },
+    {
+      "path": ".github/workflows/build.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "deef02548e99c2e08cecb428f0a2ab0d8ce59e20",
+      "size": 2303,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/deef02548e99c2e08cecb428f0a2ab0d8ce59e20"
+    },
+    {
+      "path": ".github/workflows/nightly.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b5fcc93b00c952c5c5a30e12b12265ca481cfee5",
+      "size": 2013,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b5fcc93b00c952c5c5a30e12b12265ca481cfee5"
+    },
+    {
+      "path": ".github/workflows/test-pip-install.yaml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "09346be0f26ae953f4378d43bb191b9b8b921a03",
+      "size": 1791,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/09346be0f26ae953f4378d43bb191b9b8b921a03"
+    },
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7528ee213126e141ec1bfc6d9aacc9217754b57f",
+      "size": 77,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/7528ee213126e141ec1bfc6d9aacc9217754b57f"
+    },
+    {
+      "path": ".pre-commit-config.yaml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b59784dbf4594b4feb3c036207d78c1103f4685a",
+      "size": 606,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b59784dbf4594b4feb3c036207d78c1103f4685a"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "928293f793fe5f57084cafcc3ca7f498ff142d0c",
+      "size": 2600,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/928293f793fe5f57084cafcc3ca7f498ff142d0c"
+    },
+    {
+      "path": "LICENSE",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ee06cfc772ef1c8ed22f28527fe4cee5aa06b246",
+      "size": 11728,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/ee06cfc772ef1c8ed22f28527fe4cee5aa06b246"
+    },
+    {
+      "path": "MANIFEST.in",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "94da64faa4fd1a7dda6bd6c27de49e6c10aec42b",
+      "size": 139,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/94da64faa4fd1a7dda6bd6c27de49e6c10aec42b"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d557071a0ec6d40b6301d05a9ad68dba36e54f96",
+      "size": 394,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d557071a0ec6d40b6301d05a9ad68dba36e54f96"
+    },
+    {
+      "path": "cmake",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "cca734226987146afc3defa2fa105243f1ea8d36",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/cca734226987146afc3defa2fa105243f1ea8d36"
+    },
+    {
+      "path": "cmake/googletest.cmake",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "be14bac8f723b9a321f0295505fbd089f33084fc",
+      "size": 2425,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/be14bac8f723b9a321f0295505fbd089f33084fc"
+    },
+    {
+      "path": "cmake/openfst.cmake",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "26415c158be17ec47699332b482a5c15c1756332",
+      "size": 3229,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/26415c158be17ec47699332b482a5c15c1756332"
+    },
+    {
+      "path": "cmake/pybind11.cmake",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c0ae6061eaf34a9b9b888a1c9873ddca17e75c50",
+      "size": 1415,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/c0ae6061eaf34a9b9b888a1c9873ddca17e75c50"
+    },
+    {
+      "path": "docs",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "fb64ab979b28cf2bc1315e710a9850d9ed011b20",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/fb64ab979b28cf2bc1315e710a9850d9ed011b20"
+    },
+    {
+      "path": "docs/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a2e4754771a4d875444d607cf5ea39dd4bd9b3e1",
+      "size": 1141,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/a2e4754771a4d875444d607cf5ea39dd4bd9b3e1"
+    },
+    {
+      "path": "docs/README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "22adee9d0889b63822c45748716b19271961b809",
+      "size": 390,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/22adee9d0889b63822c45748716b19271961b809"
+    },
+    {
+      "path": "docs/gen-api-doc.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "756ed50b4b35514393ca0eb3471ac6b73d47de62",
+      "size": 3690,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/756ed50b4b35514393ca0eb3471ac6b73d47de62"
+    },
+    {
+      "path": "docs/make.bat",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6fcf05b4b76f8b9774c317ac8ada402f8a7087de",
+      "size": 804,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/6fcf05b4b76f8b9774c317ac8ada402f8a7087de"
+    },
+    {
+      "path": "docs/requirements.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2ec5d24f250975cd00f6b7694cce522756b51fd2",
+      "size": 148,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2ec5d24f250975cd00f6b7694cce522756b51fd2"
+    },
+    {
+      "path": "docs/source",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "1c355196673e7bffb3c363d88dfd889e579b3159",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/1c355196673e7bffb3c363d88dfd889e579b3159"
+    },
+    {
+      "path": "docs/source/_static",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "82e3a754b6a0fcb238b03c0e47d05219fbf9cf89",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/82e3a754b6a0fcb238b03c0e47d05219fbf9cf89"
+    },
+    {
+      "path": "docs/source/_static/.gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "size": 0,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "path": "docs/source/conf.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "faacfe91b905f5998a5031a3efc40dc84d26129b",
+      "size": 3214,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/faacfe91b905f5998a5031a3efc40dc84d26129b"
+    },
+    {
+      "path": "docs/source/convert-k2-to-openfst",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0470fa198b01b92d7d141f2cb715ced237b6bb2e",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/0470fa198b01b92d7d141f2cb715ced237b6bb2e"
+    },
+    {
+      "path": "docs/source/convert-k2-to-openfst/code",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0630ae9a2471f42f36893f2d019e1d2312d5160e",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/0630ae9a2471f42f36893f2d019e1d2312d5160e"
+    },
+    {
+      "path": "docs/source/convert-k2-to-openfst/code/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2717a7bf2bd11fa00f9518b4c83c1be91d554ede",
+      "size": 95,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2717a7bf2bd11fa00f9518b4c83c1be91d554ede"
+    },
+    {
+      "path": "docs/source/convert-k2-to-openfst/code/convert-acceptor.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "43f4c313e0c0575e911049c37273b3c8ff66dbab",
+      "size": 640,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/43f4c313e0c0575e911049c37273b3c8ff66dbab"
+    },
+    {
+      "path": "docs/source/convert-k2-to-openfst/code/convert-transducer.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "73d6d3a9ac9803dd84a7a3b4600ae8fefb83a166",
+      "size": 815,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/73d6d3a9ac9803dd84a7a3b4600ae8fefb83a166"
+    },
+    {
+      "path": "docs/source/convert-k2-to-openfst/convert-acceptor.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c6f09c926eddf4b2d79b5047b9201bdfab4efe1b",
+      "size": 614,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/c6f09c926eddf4b2d79b5047b9201bdfab4efe1b"
+    },
+    {
+      "path": "docs/source/convert-k2-to-openfst/convert-transducer.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "12da336e06fa5ca7d86094ec857ea2557248eb1e",
+      "size": 633,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/12da336e06fa5ca7d86094ec857ea2557248eb1e"
+    },
+    {
+      "path": "docs/source/convert-k2-to-openfst/index.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "55f3034f36c650cf319b307b1572fb754a71b464",
+      "size": 191,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/55f3034f36c650cf319b307b1572fb754a71b464"
+    },
+    {
+      "path": "docs/source/index.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "73027ee9669b1b7fe18917ef6b50b3e0330d55f3",
+      "size": 666,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/73027ee9669b1b7fe18917ef6b50b3e0330d55f3"
+    },
+    {
+      "path": "docs/source/install",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6465a6db823d20eef1a856d9f5fd87a83a033b84",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/6465a6db823d20eef1a856d9f5fd87a83a033b84"
+    },
+    {
+      "path": "docs/source/install/index.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f4f16f5f69aaf26bcce6f49269d20109e446e96d",
+      "size": 914,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/f4f16f5f69aaf26bcce6f49269d20109e446e96d"
+    },
+    {
+      "path": "docs/source/lattice",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "ff31da350adadb0a8a575d9d59f2d58554c864fa",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/ff31da350adadb0a8a575d9d59f2d58554c864fa"
+    },
+    {
+      "path": "docs/source/lattice/code",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "73909cca701a31ee40c7edc038491c09e3517ebc",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/73909cca701a31ee40c7edc038491c09e3517ebc"
+    },
+    {
+      "path": "docs/source/lattice/code/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ee8380d9f1346ceee088a4043b2bed98f244ca67",
+      "size": 50,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/ee8380d9f1346ceee088a4043b2bed98f244ca67"
+    },
+    {
+      "path": "docs/source/lattice/code/ex1.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "4cfe710ea45e9611445bff217a5928ae4d1fdd9f",
+      "size": 1577,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/4cfe710ea45e9611445bff217a5928ae4d1fdd9f"
+    },
+    {
+      "path": "docs/source/lattice/index.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6e72fd4cd0542d7c9f4ce3ace0b91c0d908458b9",
+      "size": 58,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/6e72fd4cd0542d7c9f4ce3ace0b91c0d908458b9"
+    },
+    {
+      "path": "docs/source/lattice/intro.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "283fa6f0aed6ef280ecea75fa1a3a1a89af10787",
+      "size": 804,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/283fa6f0aed6ef280ecea75fa1a3a1a89af10787"
+    },
+    {
+      "path": "docs/source/python_api",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a6338f39b122aeb9ff90b9fa31d18a0b68e31b07",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/a6338f39b122aeb9ff90b9fa31d18a0b68e31b07"
+    },
+    {
+      "path": "docs/source/python_api/.gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8edc9a634c2809bbee0ec07380d8c77be82a1382",
+      "size": 8,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/8edc9a634c2809bbee0ec07380d8c77be82a1382"
+    },
+    {
+      "path": "docs/source/python_api/code",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "529e0c99e90c088de4d7fa518dd6fd0833724988",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/529e0c99e90c088de4d7fa518dd6fd0833724988"
+    },
+    {
+      "path": "docs/source/python_api/code/.gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "76b6d53e0c9eccc68c29308b16789a5eb21d462e",
+      "size": 11,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/76b6d53e0c9eccc68c29308b16789a5eb21d462e"
+    },
+    {
+      "path": "docs/source/python_api/code/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d6f6536f680848f2274a3a9de88c96576cff8cf0",
+      "size": 1140,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d6f6536f680848f2274a3a9de88c96576cff8cf0"
+    },
+    {
+      "path": "docs/source/python_api/code/add_self_loops",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "df1171502c2403fb87cf9f2400f4677e5003dbde",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/df1171502c2403fb87cf9f2400f4677e5003dbde"
+    },
+    {
+      "path": "docs/source/python_api/code/add_self_loops/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b59da9c7cf278764cb1531f1800b7f5ad22e538",
+      "size": 49,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b59da9c7cf278764cb1531f1800b7f5ad22e538"
+    },
+    {
+      "path": "docs/source/python_api/code/add_self_loops/ex.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8e00429b776d454bc1373ac56a05c8dcb51b4d59",
+      "size": 993,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/8e00429b776d454bc1373ac56a05c8dcb51b4d59"
+    },
+    {
+      "path": "docs/source/python_api/code/arcsort",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3ed9a7c2e22a212f01cb99a0fa50aa2260d78e56",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/3ed9a7c2e22a212f01cb99a0fa50aa2260d78e56"
+    },
+    {
+      "path": "docs/source/python_api/code/arcsort/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "de6d726921fb6a12b1180226bb5a0048d81b34f5",
+      "size": 107,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/de6d726921fb6a12b1180226bb5a0048d81b34f5"
+    },
+    {
+      "path": "docs/source/python_api/code/arcsort/acceptor.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1cebaad1529d307756ead6b12c14c9016e94d0f4",
+      "size": 443,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/1cebaad1529d307756ead6b12c14c9016e94d0f4"
+    },
+    {
+      "path": "docs/source/python_api/code/arcsort/transducer1.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2380c138784570a78310fa70191f9a9e11696002",
+      "size": 500,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2380c138784570a78310fa70191f9a9e11696002"
+    },
+    {
+      "path": "docs/source/python_api/code/arcsort/transducer2.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b7689671916ecbe8238a5c6cdf201069f5a54fd3",
+      "size": 500,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b7689671916ecbe8238a5c6cdf201069f5a54fd3"
+    },
+    {
+      "path": "docs/source/python_api/code/compose",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "72e1aa8f19ceb20cf3a077a78dc440fbbe07d11c",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/72e1aa8f19ceb20cf3a077a78dc440fbbe07d11c"
+    },
+    {
+      "path": "docs/source/python_api/code/compose/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b59da9c7cf278764cb1531f1800b7f5ad22e538",
+      "size": 49,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b59da9c7cf278764cb1531f1800b7f5ad22e538"
+    },
+    {
+      "path": "docs/source/python_api/code/compose/ex.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a692e294be4352e87f52ebc2d5712e887956ee57",
+      "size": 1217,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/a692e294be4352e87f52ebc2d5712e887956ee57"
+    },
+    {
+      "path": "docs/source/python_api/code/connect",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "c3e4f9a29e5f05df50da77356d9c5d0b3240a2c6",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/c3e4f9a29e5f05df50da77356d9c5d0b3240a2c6"
+    },
+    {
+      "path": "docs/source/python_api/code/connect/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b59da9c7cf278764cb1531f1800b7f5ad22e538",
+      "size": 49,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b59da9c7cf278764cb1531f1800b7f5ad22e538"
+    },
+    {
+      "path": "docs/source/python_api/code/connect/ex.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8775b29f189e73fc026e32655b2ce8bdecc04d97",
+      "size": 851,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/8775b29f189e73fc026e32655b2ce8bdecc04d97"
+    },
+    {
+      "path": "docs/source/python_api/code/convert_nbest_to_vector",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "5b4bd93fc9ae21c00da4e900b4191453901ba14a",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/5b4bd93fc9ae21c00da4e900b4191453901ba14a"
+    },
+    {
+      "path": "docs/source/python_api/code/convert_nbest_to_vector/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d9db49f710776614b8a28441b3e96f28e288d36c",
+      "size": 68,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d9db49f710776614b8a28441b3e96f28e288d36c"
+    },
+    {
+      "path": "docs/source/python_api/code/convert_nbest_to_vector/ex1.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "427d23b0a37c855dfe93183c4fe82bc723cff27a",
+      "size": 1464,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/427d23b0a37c855dfe93183c4fe82bc723cff27a"
+    },
+    {
+      "path": "docs/source/python_api/code/convert_nbest_to_vector/ex2.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "f01c36aff26ed0e734b99655dd427598b4ec72ff",
+      "size": 2908,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/f01c36aff26ed0e734b99655dd427598b4ec72ff"
+    },
+    {
+      "path": "docs/source/python_api/code/determinize",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "632eccf9a6226195ca8822ddbeff88230c3b8763",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/632eccf9a6226195ca8822ddbeff88230c3b8763"
+    },
+    {
+      "path": "docs/source/python_api/code/determinize/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b59da9c7cf278764cb1531f1800b7f5ad22e538",
+      "size": 49,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b59da9c7cf278764cb1531f1800b7f5ad22e538"
+    },
+    {
+      "path": "docs/source/python_api/code/determinize/ex.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "eef3ef61a2ee595ca9ce659d3c913f532c3018bb",
+      "size": 862,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/eef3ef61a2ee595ca9ce659d3c913f532c3018bb"
+    },
+    {
+      "path": "docs/source/python_api/code/determinizestar",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "f924d5b2af49dbc198a6148e61811274ac8373cf",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/f924d5b2af49dbc198a6148e61811274ac8373cf"
+    },
+    {
+      "path": "docs/source/python_api/code/determinizestar/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b59da9c7cf278764cb1531f1800b7f5ad22e538",
+      "size": 49,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b59da9c7cf278764cb1531f1800b7f5ad22e538"
+    },
+    {
+      "path": "docs/source/python_api/code/determinizestar/ex.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "42ef7f6c46ea027a3a7afbb7e2aef7c79323368a",
+      "size": 861,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/42ef7f6c46ea027a3a7afbb7e2aef7c79323368a"
+    },
+    {
+      "path": "docs/source/python_api/code/draw",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6f91248bd5931aece7943beec3bfbcb2cc8ce137",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/6f91248bd5931aece7943beec3bfbcb2cc8ce137"
+    },
+    {
+      "path": "docs/source/python_api/code/draw/.gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e4d80f6f7323607f2903dcaa82563ffd7ad5203f",
+      "size": 12,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/e4d80f6f7323607f2903dcaa82563ffd7ad5203f"
+    },
+    {
+      "path": "docs/source/python_api/code/draw/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "64acfbbb14a0ae2d5cd6ba12ecba9b010cc38ab5",
+      "size": 55,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/64acfbbb14a0ae2d5cd6ba12ecba9b010cc38ab5"
+    },
+    {
+      "path": "docs/source/python_api/code/draw/ex.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "18341dee4cf3eac286c0598148e73cb62ad734ab",
+      "size": 614,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/18341dee4cf3eac286c0598148e73cb62ad734ab"
+    },
+    {
+      "path": "docs/source/python_api/code/equal_align",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a4efce47a31431914984ef89099bbc36e884626e",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/a4efce47a31431914984ef89099bbc36e884626e"
+    },
+    {
+      "path": "docs/source/python_api/code/equal_align/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b59da9c7cf278764cb1531f1800b7f5ad22e538",
+      "size": 49,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b59da9c7cf278764cb1531f1800b7f5ad22e538"
+    },
+    {
+      "path": "docs/source/python_api/code/equal_align/ex.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1f11394862a460a737b894999b65a59cc311520f",
+      "size": 1609,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/1f11394862a460a737b894999b65a59cc311520f"
+    },
+    {
+      "path": "docs/source/python_api/code/fstcompile",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "10e7538647a643815820faafbf03626c97d11f90",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/10e7538647a643815820faafbf03626c97d11f90"
+    },
+    {
+      "path": "docs/source/python_api/code/fstcompile/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "15a183e5f54166e90c68c4f0d3c93c1e4a17ebce",
+      "size": 132,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/15a183e5f54166e90c68c4f0d3c93c1e4a17ebce"
+    },
+    {
+      "path": "docs/source/python_api/code/fstcompile/acceptor1.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c8f283fb378fe1aa6a2fd0db4324dcd7aa9e1579",
+      "size": 265,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/c8f283fb378fe1aa6a2fd0db4324dcd7aa9e1579"
+    },
+    {
+      "path": "docs/source/python_api/code/fstcompile/acceptor2.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bb368d6da2599935f908c3a9d386bb917cdaef54",
+      "size": 428,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/bb368d6da2599935f908c3a9d386bb917cdaef54"
+    },
+    {
+      "path": "docs/source/python_api/code/fstcompile/transducer1.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bcd72ad212b431381a4c32e6e943fdb70029046b",
+      "size": 275,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/bcd72ad212b431381a4c32e6e943fdb70029046b"
+    },
+    {
+      "path": "docs/source/python_api/code/fstcompile/transducer2.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d288e9e45544fcf2c666ae3ec19ef6012af3b515",
+      "size": 634,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d288e9e45544fcf2c666ae3ec19ef6012af3b515"
+    },
+    {
+      "path": "docs/source/python_api/code/get_linear_symbol_sequence",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6313e8b5cb4a7f894ef52966de6a6f6342585638",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/6313e8b5cb4a7f894ef52966de6a6f6342585638"
+    },
+    {
+      "path": "docs/source/python_api/code/get_linear_symbol_sequence/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b59da9c7cf278764cb1531f1800b7f5ad22e538",
+      "size": 49,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b59da9c7cf278764cb1531f1800b7f5ad22e538"
+    },
+    {
+      "path": "docs/source/python_api/code/get_linear_symbol_sequence/ex.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ade58507d6e45ad0316a68d2e5a5aaa4967c0c45",
+      "size": 453,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/ade58507d6e45ad0316a68d2e5a5aaa4967c0c45"
+    },
+    {
+      "path": "docs/source/python_api/code/invert",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "1825e0af35f9f05dac9c9883a23c79a5fcabda71",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/1825e0af35f9f05dac9c9883a23c79a5fcabda71"
+    },
+    {
+      "path": "docs/source/python_api/code/invert/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b59da9c7cf278764cb1531f1800b7f5ad22e538",
+      "size": 49,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b59da9c7cf278764cb1531f1800b7f5ad22e538"
+    },
+    {
+      "path": "docs/source/python_api/code/invert/ex.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2c71f8891249d1feb6bb18a6cd1cead3cdbaa84b",
+      "size": 803,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2c71f8891249d1feb6bb18a6cd1cead3cdbaa84b"
+    },
+    {
+      "path": "docs/source/python_api/code/lattice_scale",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "4373c72e6d68c401d9e52bfe03f27a04e816b17c",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/4373c72e6d68c401d9e52bfe03f27a04e816b17c"
+    },
+    {
+      "path": "docs/source/python_api/code/lattice_scale/ex.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1df0d5d459a1a02acd2ce04a0055caa2e69d2c12",
+      "size": 130,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/1df0d5d459a1a02acd2ce04a0055caa2e69d2c12"
+    },
+    {
+      "path": "docs/source/python_api/code/lattice_to_nbest",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "c5ae8f74a14680a54bff3534b25881e201382dea",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/c5ae8f74a14680a54bff3534b25881e201382dea"
+    },
+    {
+      "path": "docs/source/python_api/code/lattice_to_nbest/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d9db49f710776614b8a28441b3e96f28e288d36c",
+      "size": 68,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d9db49f710776614b8a28441b3e96f28e288d36c"
+    },
+    {
+      "path": "docs/source/python_api/code/lattice_to_nbest/ex1.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "3c94c227deb3af989a98cc01c4c12fc33f836cf6",
+      "size": 1247,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3c94c227deb3af989a98cc01c4c12fc33f836cf6"
+    },
+    {
+      "path": "docs/source/python_api/code/lattice_to_nbest/ex2.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "c6c06364dcd92e89db6088da4eaea2f1756bba6d",
+      "size": 2693,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/c6c06364dcd92e89db6088da4eaea2f1756bba6d"
+    },
+    {
+      "path": "docs/source/python_api/code/make_linear_acceptor",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "9da44ee366769cefb12343e4acab3f3f7ba3e46c",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/9da44ee366769cefb12343e4acab3f3f7ba3e46c"
+    },
+    {
+      "path": "docs/source/python_api/code/make_linear_acceptor/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b59da9c7cf278764cb1531f1800b7f5ad22e538",
+      "size": 49,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b59da9c7cf278764cb1531f1800b7f5ad22e538"
+    },
+    {
+      "path": "docs/source/python_api/code/make_linear_acceptor/ex.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ca37b4d79ce1abe77e31827dc07b4ca1f682a325",
+      "size": 420,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/ca37b4d79ce1abe77e31827dc07b4ca1f682a325"
+    },
+    {
+      "path": "docs/source/python_api/code/minimize",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "c33e607a24c208e97e209f7c808507dc0513d9d9",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/c33e607a24c208e97e209f7c808507dc0513d9d9"
+    },
+    {
+      "path": "docs/source/python_api/code/minimize/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2c0011933f129cf2d188c498795d00d146bd37ca",
+      "size": 80,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2c0011933f129cf2d188c498795d00d146bd37ca"
+    },
+    {
+      "path": "docs/source/python_api/code/minimize/acceptor.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5c0274139e7b7e37997135af111e0375276ce4b3",
+      "size": 685,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/5c0274139e7b7e37997135af111e0375276ce4b3"
+    },
+    {
+      "path": "docs/source/python_api/code/minimize/transducer.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "725d6daaa81405e7064e450213d2ff26c91ca2c1",
+      "size": 843,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/725d6daaa81405e7064e450213d2ff26c91ca2c1"
+    },
+    {
+      "path": "docs/source/python_api/code/minimize_encoded",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "018c09462c98b81c663459a58d2d79d675daac8a",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/018c09462c98b81c663459a58d2d79d675daac8a"
+    },
+    {
+      "path": "docs/source/python_api/code/minimize_encoded/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2c0011933f129cf2d188c498795d00d146bd37ca",
+      "size": 80,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2c0011933f129cf2d188c498795d00d146bd37ca"
+    },
+    {
+      "path": "docs/source/python_api/code/minimize_encoded/acceptor.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fced4be643d5b710b3fdf946f94216b39a64b6bd",
+      "size": 726,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/fced4be643d5b710b3fdf946f94216b39a64b6bd"
+    },
+    {
+      "path": "docs/source/python_api/code/minimize_encoded/transducer.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "316037c391969b07163a9853e34669471d1c1902",
+      "size": 858,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/316037c391969b07163a9853e34669471d1c1902"
+    },
+    {
+      "path": "docs/source/python_api/code/reverse",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "c7c7d39f85cc5fbb63dc77b129a5d2e4d4cf413b",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/c7c7d39f85cc5fbb63dc77b129a5d2e4d4cf413b"
+    },
+    {
+      "path": "docs/source/python_api/code/reverse/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1d862e187d3e23cb789f96131766b88346604e3c",
+      "size": 104,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/1d862e187d3e23cb789f96131766b88346604e3c"
+    },
+    {
+      "path": "docs/source/python_api/code/reverse/ex1.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "15afa2fc95b1a22484cbdac4d402cd736d75611a",
+      "size": 721,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/15afa2fc95b1a22484cbdac4d402cd736d75611a"
+    },
+    {
+      "path": "docs/source/python_api/code/reverse/ex2.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "87dd4ff4493a37050db54878d57f6375783e46cf",
+      "size": 726,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/87dd4ff4493a37050db54878d57f6375783e46cf"
+    },
+    {
+      "path": "docs/source/python_api/code/reverse/ex3.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "db4f46c3fca5a834fc711587e23a34ceb13877a0",
+      "size": 733,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/db4f46c3fca5a834fc711587e23a34ceb13877a0"
+    },
+    {
+      "path": "docs/source/python_api/code/reverse/ex4.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4daf2d88f231df4577e73bc02b30c0cda0a1ba1e",
+      "size": 738,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/4daf2d88f231df4577e73bc02b30c0cda0a1ba1e"
+    },
+    {
+      "path": "docs/source/python_api/code/rmepsilon",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "b674810345ad3f614e4ed2cf264cbf27ebf56532",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/b674810345ad3f614e4ed2cf264cbf27ebf56532"
+    },
+    {
+      "path": "docs/source/python_api/code/rmepsilon/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b59da9c7cf278764cb1531f1800b7f5ad22e538",
+      "size": 49,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b59da9c7cf278764cb1531f1800b7f5ad22e538"
+    },
+    {
+      "path": "docs/source/python_api/code/rmepsilon/ex.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d9b9d907f3adf4bcd84b59e6523167dbe3e5c677",
+      "size": 779,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d9b9d907f3adf4bcd84b59e6523167dbe3e5c677"
+    },
+    {
+      "path": "docs/source/python_api/code/scale_lattice",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "1ca9b98c135ade857c00a5ffb9e3476a358977d5",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/1ca9b98c135ade857c00a5ffb9e3476a358977d5"
+    },
+    {
+      "path": "docs/source/python_api/code/scale_lattice/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d9db49f710776614b8a28441b3e96f28e288d36c",
+      "size": 68,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d9db49f710776614b8a28441b3e96f28e288d36c"
+    },
+    {
+      "path": "docs/source/python_api/code/scale_lattice/ex1.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "17827b9253efd49e1b222adeecc3239d2acff3e5",
+      "size": 1434,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/17827b9253efd49e1b222adeecc3239d2acff3e5"
+    },
+    {
+      "path": "docs/source/python_api/code/scale_lattice/ex2.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c55762f0b586bcf59959bf8ea308c2bebcc46113",
+      "size": 1416,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/c55762f0b586bcf59959bf8ea308c2bebcc46113"
+    },
+    {
+      "path": "docs/source/python_api/code/shortest_path",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "83e552e5770d3ec55a7c37f65ae6a5fe2b1dd36e",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/83e552e5770d3ec55a7c37f65ae6a5fe2b1dd36e"
+    },
+    {
+      "path": "docs/source/python_api/code/shortest_path/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d9db49f710776614b8a28441b3e96f28e288d36c",
+      "size": 68,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d9db49f710776614b8a28441b3e96f28e288d36c"
+    },
+    {
+      "path": "docs/source/python_api/code/shortest_path/ex1.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "1a4065cbeca3a3f3f24253ed35717ff1d3089eb2",
+      "size": 1139,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/1a4065cbeca3a3f3f24253ed35717ff1d3089eb2"
+    },
+    {
+      "path": "docs/source/python_api/code/shortest_path/ex2.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "993d636a9924d8fa2d29c22219b70473de50344f",
+      "size": 2588,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/993d636a9924d8fa2d29c22219b70473de50344f"
+    },
+    {
+      "path": "docs/source/python_api/index.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "59a8bb8d308eddb0711c5a1384142609f4307f17",
+      "size": 81,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/59a8bb8d308eddb0711c5a1384142609f4307f17"
+    },
+    {
+      "path": "docs/source/quick_start",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "67c51133e09d17b05d9714542a7d17aa9a4c9729",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/67c51133e09d17b05d9714542a7d17aa9a4c9729"
+    },
+    {
+      "path": "docs/source/quick_start/code",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6885e3f706ea8bb2703e2942e6286d3452638e39",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/6885e3f706ea8bb2703e2942e6286d3452638e39"
+    },
+    {
+      "path": "docs/source/quick_start/code/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8d937d3d166276563929897cb6db383fd7f58533",
+      "size": 243,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/8d937d3d166276563929897cb6db383fd7f58533"
+    },
+    {
+      "path": "docs/source/quick_start/code/quick-start-2.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "25d02d5c186185658ce4867825067d4d2037b21d",
+      "size": 768,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/25d02d5c186185658ce4867825067d4d2037b21d"
+    },
+    {
+      "path": "docs/source/quick_start/code/quick-start-3.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "51190c0014e066d8e43b70860ebf3323c55d97d2",
+      "size": 906,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/51190c0014e066d8e43b70860ebf3323c55d97d2"
+    },
+    {
+      "path": "docs/source/quick_start/code/quick-start.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "507a3d889a5ca42215a562c3b09bd8e1f4f2167d",
+      "size": 2102,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/507a3d889a5ca42215a562c3b09bd8e1f4f2167d"
+    },
+    {
+      "path": "docs/source/quick_start/index.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "563bf9ab7324be1664b181ea8c297f49fe5de4b9",
+      "size": 88,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/563bf9ab7324be1664b181ea8c297f49fe5de4b9"
+    },
+    {
+      "path": "docs/source/quick_start/quick-start-2.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1c664a9815329119ec184aedb97783a60b12e316",
+      "size": 460,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/1c664a9815329119ec184aedb97783a60b12e316"
+    },
+    {
+      "path": "docs/source/quick_start/quick-start-3.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d1ee52812443840925a4c4ab1fe4b8211f8825c4",
+      "size": 720,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d1ee52812443840925a4c4ab1fe4b8211f8825c4"
+    },
+    {
+      "path": "docs/source/quick_start/quick-start.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1136b1dfc2f3c78977008539661f624eaec47d75",
+      "size": 491,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/1136b1dfc2f3c78977008539661f624eaec47d75"
+    },
+    {
+      "path": "docs/source/read-write-ark-scp",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3855a09b0c0c4839d31847a3262ea51162090ac2",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/3855a09b0c0c4839d31847a3262ea51162090ac2"
+    },
+    {
+      "path": "docs/source/read-write-ark-scp/code",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "55884ef6827248fd84503723367af0f3eaa97b6a",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/55884ef6827248fd84503723367af0f3eaa97b6a"
+    },
+    {
+      "path": "docs/source/read-write-ark-scp/code/Makefile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f62980f6f98e13062d3fcb061751a0aa638005d1",
+      "size": 121,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/f62980f6f98e13062d3fcb061751a0aa638005d1"
+    },
+    {
+      "path": "docs/source/read-write-ark-scp/code/random-access-reader.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9e02bff76145cc3e2256a0bdcddc359c258e15f4",
+      "size": 422,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/9e02bff76145cc3e2256a0bdcddc359c258e15f4"
+    },
+    {
+      "path": "docs/source/read-write-ark-scp/code/sequential-reader.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1a4886167cd58ba74de42fdb3b5b007eecdf42a5",
+      "size": 410,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/1a4886167cd58ba74de42fdb3b5b007eecdf42a5"
+    },
+    {
+      "path": "docs/source/read-write-ark-scp/code/writer.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e511fa02756ae01efe77f88478dddbeb29fe512d",
+      "size": 1115,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/e511fa02756ae01efe77f88478dddbeb29fe512d"
+    },
+    {
+      "path": "docs/source/read-write-ark-scp/index.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4154755bbf8a1d515c487b5f81a20e2900240a8b",
+      "size": 2437,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/4154755bbf8a1d515c487b5f81a20e2900240a8b"
+    },
+    {
+      "path": "docs/source/referencens",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "c67c3ecda487cefd7994fe5cedf68649a27c8b45",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/c67c3ecda487cefd7994fe5cedf68649a27c8b45"
+    },
+    {
+      "path": "docs/source/referencens/index.rst",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ffb66c54e85dc4423b9ca683aed303b4908da760",
+      "size": 4340,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/ffb66c54e85dc4423b9ca683aed303b4908da760"
+    },
+    {
+      "path": "kaldifst",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "5f17d5fe6d1ba5c1acd83004e6d9f54e5c57257e",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/5f17d5fe6d1ba5c1acd83004e6d9f54e5c57257e"
+    },
+    {
+      "path": "kaldifst/CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b5d0a7aa0e6dae2d7bc036bacd088c30f1edfb14",
+      "size": 85,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b5d0a7aa0e6dae2d7bc036bacd088c30f1edfb14"
+    },
+    {
+      "path": "kaldifst/csrc",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d2ff9d0c308581e62a5e9a7cbf2fd7118e1faa0a",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/d2ff9d0c308581e62a5e9a7cbf2fd7118e1faa0a"
+    },
+    {
+      "path": "kaldifst/csrc/CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8463be7d54e81ef7597f76d7269e53d0295131c6",
+      "size": 1525,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/8463be7d54e81ef7597f76d7269e53d0295131c6"
+    },
+    {
+      "path": "kaldifst/csrc/basic-filebuf.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "949482c0050a6fe075d7943bf119982ed763dcdc",
+      "size": 35789,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/949482c0050a6fe075d7943bf119982ed763dcdc"
+    },
+    {
+      "path": "kaldifst/csrc/const-integer-set-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4273395891fa4d72f02b71d2409973952ba2f35d",
+      "size": 2137,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/4273395891fa4d72f02b71d2409973952ba2f35d"
+    },
+    {
+      "path": "kaldifst/csrc/const-integer-set.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b2533c923ad9086b7b75ec35e8a2542fba78a0d1",
+      "size": 2433,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b2533c923ad9086b7b75ec35e8a2542fba78a0d1"
+    },
+    {
+      "path": "kaldifst/csrc/context-fst.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6920083f43115f2901dbeeea00afe70b390951a7",
+      "size": 12149,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/6920083f43115f2901dbeeea00afe70b390951a7"
+    },
+    {
+      "path": "kaldifst/csrc/context-fst.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "57cc65d308014871384808ea203d8c3d3e61d273",
+      "size": 13284,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/57cc65d308014871384808ea203d8c3d3e61d273"
+    },
+    {
+      "path": "kaldifst/csrc/deterministic-fst-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "71189098d6ab087a99037604cc5250bf45df4ea3",
+      "size": 11150,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/71189098d6ab087a99037604cc5250bf45df4ea3"
+    },
+    {
+      "path": "kaldifst/csrc/deterministic-fst.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "16943f3d2a9eb667b70a62f8f52fe3498c61c036",
+      "size": 4518,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/16943f3d2a9eb667b70a62f8f52fe3498c61c036"
+    },
+    {
+      "path": "kaldifst/csrc/determinize-star-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "96161876b458b5b6c98ba96240d0f9695f42365c",
+      "size": 42345,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/96161876b458b5b6c98ba96240d0f9695f42365c"
+    },
+    {
+      "path": "kaldifst/csrc/determinize-star.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cbd60f964c975a069b78938fee9a8fa1721b406a",
+      "size": 1908,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/cbd60f964c975a069b78938fee9a8fa1721b406a"
+    },
+    {
+      "path": "kaldifst/csrc/fstext-utils-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "59701479c155deef58ce31ab71c459f904c2801d",
+      "size": 22546,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/59701479c155deef58ce31ab71c459f904c2801d"
+    },
+    {
+      "path": "kaldifst/csrc/fstext-utils.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7ffb0dffca1d40220f056590beac27a7fe1edc0f",
+      "size": 7522,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/7ffb0dffca1d40220f056590beac27a7fe1edc0f"
+    },
+    {
+      "path": "kaldifst/csrc/grammar-context-fst.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bcf5a2bc09f9e1e3546f72bf70e2fd30d5b1c658",
+      "size": 1674,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/bcf5a2bc09f9e1e3546f72bf70e2fd30d5b1c658"
+    },
+    {
+      "path": "kaldifst/csrc/io-funcs-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dd99acbe6bd6d6a2c1a0237ec652d7fda1a023d6",
+      "size": 1626,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/dd99acbe6bd6d6a2c1a0237ec652d7fda1a023d6"
+    },
+    {
+      "path": "kaldifst/csrc/io-funcs.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b282623e1806dc4b5311d312cd7991983e523799",
+      "size": 1035,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b282623e1806dc4b5311d312cd7991983e523799"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-fst-io-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a12a19e3836b5e9bd6dcb5145ffa9d3ae9b391b1",
+      "size": 6327,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/a12a19e3836b5e9bd6dcb5145ffa9d3ae9b391b1"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-fst-io-test.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "52a55fe6a542247dba92c31c82727e9d9dc9be35",
+      "size": 879,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/52a55fe6a542247dba92c31c82727e9d9dc9be35"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-fst-io.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "609af1ea174a0d8c8c776f6ac1f5ea4e69b237d6",
+      "size": 5589,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/609af1ea174a0d8c8c776f6ac1f5ea4e69b237d6"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-fst-io.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2e6a9e1456e71cda685ec0637b9f20ded6017276",
+      "size": 5646,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2e6a9e1456e71cda685ec0637b9f20ded6017276"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-holder-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6b5275fa8f4f88cd3ae8981ef25cc88f04c0ea82",
+      "size": 2100,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/6b5275fa8f4f88cd3ae8981ef25cc88f04c0ea82"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-holder.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d41bf3560e43c55d9508502cd9ce0e95061a3d4e",
+      "size": 1041,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d41bf3560e43c55d9508502cd9ce0e95061a3d4e"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-holder.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e93ce727a4df227cdadcf60eb97f5cdeaa455344",
+      "size": 1603,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/e93ce727a4df227cdadcf60eb97f5cdeaa455344"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-io-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dda5b597b521b9623069d16eea6dab9c5b6786ea",
+      "size": 1269,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/dda5b597b521b9623069d16eea6dab9c5b6786ea"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-io.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "21815301543df6648f7982d24a54c9b0b20e3f5d",
+      "size": 26263,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/21815301543df6648f7982d24a54c9b0b20e3f5d"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-io.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bdbbc73585013bc017b4723c746ba53cb629f1f4",
+      "size": 9086,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/bdbbc73585013bc017b4723c746ba53cb629f1f4"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-math.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1796117db7a93e6e19f46a30f3ea2bcae4576e02",
+      "size": 2738,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/1796117db7a93e6e19f46a30f3ea2bcae4576e02"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-math.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f915cddc61a6b11bf954543d6f02d5e0bbad932a",
+      "size": 738,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/f915cddc61a6b11bf954543d6f02d5e0bbad932a"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-pipebuf.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5915d7887663e0df6a95824669635d94c5dd2243",
+      "size": 2867,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/5915d7887663e0df6a95824669635d94c5dd2243"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-semaphore.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c4b62f148a1e07b04c865ba9db9b7bbd1782f0d0",
+      "size": 1492,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/c4b62f148a1e07b04c865ba9db9b7bbd1782f0d0"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-semaphore.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b3c90f62e984e54c3df8b5532ba165b2cd2db3bf",
+      "size": 1578,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b3c90f62e984e54c3df8b5532ba165b2cd2db3bf"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-table-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bbae1bd669afd035af3c3348700f583844a03458",
+      "size": 101014,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/bbae1bd669afd035af3c3348700f583844a03458"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-table.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "acb48b48dbc1129df04e3402cba328fda473f218",
+      "size": 10427,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/acb48b48dbc1129df04e3402cba328fda473f218"
+    },
+    {
+      "path": "kaldifst/csrc/kaldi-table.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2b5b6787906f1362d404d6082729150598904b3c",
+      "size": 17657,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2b5b6787906f1362d404d6082729150598904b3c"
+    },
+    {
+      "path": "kaldifst/csrc/lattice-utils-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "024ffe5160e05a2c2d1afc63ee6f757dfe78db60",
+      "size": 1289,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/024ffe5160e05a2c2d1afc63ee6f757dfe78db60"
+    },
+    {
+      "path": "kaldifst/csrc/lattice-utils.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ee7480d1779068b33b9103cb66cb70b2cfba7825",
+      "size": 1449,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/ee7480d1779068b33b9103cb66cb70b2cfba7825"
+    },
+    {
+      "path": "kaldifst/csrc/lattice-weight.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ff78cf576113cde0b5284ede454f16f03ec458a8",
+      "size": 32229,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/ff78cf576113cde0b5284ede454f16f03ec458a8"
+    },
+    {
+      "path": "kaldifst/csrc/log.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8f5d2a0625f4e96782fd26ccac00307982007036",
+      "size": 2481,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/8f5d2a0625f4e96782fd26ccac00307982007036"
+    },
+    {
+      "path": "kaldifst/csrc/parse-options.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "38297c7b39fb24bbfe88cfbe020ba1eb00e773b3",
+      "size": 4584,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/38297c7b39fb24bbfe88cfbe020ba1eb00e773b3"
+    },
+    {
+      "path": "kaldifst/csrc/parse-options.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "614dfcdcca308b432d151a5e279197318bb144e4",
+      "size": 818,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/614dfcdcca308b432d151a5e279197318bb144e4"
+    },
+    {
+      "path": "kaldifst/csrc/pre-determinize-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d7fc371195142a45cb7f62e148ee3c460ccc8a5d",
+      "size": 3342,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d7fc371195142a45cb7f62e148ee3c460ccc8a5d"
+    },
+    {
+      "path": "kaldifst/csrc/pre-determinize.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9ecc92a4ec24d85b825feb8a9ae3eb8b74345375",
+      "size": 1628,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/9ecc92a4ec24d85b825feb8a9ae3eb8b74345375"
+    },
+    {
+      "path": "kaldifst/csrc/remove-eps-local-inl.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7c3f9eea5d673036bbc8727162a36dcf9271bb6c",
+      "size": 11206,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/7c3f9eea5d673036bbc8727162a36dcf9271bb6c"
+    },
+    {
+      "path": "kaldifst/csrc/remove-eps-local.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2698d64b1084d471b6b1f3f3764f4c6770f95734",
+      "size": 1930,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2698d64b1084d471b6b1f3f3764f4c6770f95734"
+    },
+    {
+      "path": "kaldifst/csrc/stl-utils.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "da77b386fcca33ee09153e223914a17b6347fe00",
+      "size": 2964,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/da77b386fcca33ee09153e223914a17b6347fe00"
+    },
+    {
+      "path": "kaldifst/csrc/table-matcher.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e96d156c02b771dc305bebe110894046d314a825",
+      "size": 13555,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/e96d156c02b771dc305bebe110894046d314a825"
+    },
+    {
+      "path": "kaldifst/csrc/text-normalizer.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "af85751e47660a8a6d5d13441337e4d9404d2457",
+      "size": 5936,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/af85751e47660a8a6d5d13441337e4d9404d2457"
+    },
+    {
+      "path": "kaldifst/csrc/text-normalizer.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "92f73f9c7f0bdd8f403692a2e9a119dde25c3b85",
+      "size": 1050,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/92f73f9c7f0bdd8f403692a2e9a119dde25c3b85"
+    },
+    {
+      "path": "kaldifst/csrc/text-utils.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5a68e25a1520bcfbf74bbb8ef470e21db3a4a19d",
+      "size": 2751,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/5a68e25a1520bcfbf74bbb8ef470e21db3a4a19d"
+    },
+    {
+      "path": "kaldifst/csrc/text-utils.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "212b95523b7db0065f4d3da33fef8325b4a5710b",
+      "size": 4723,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/212b95523b7db0065f4d3da33fef8325b4a5710b"
+    },
+    {
+      "path": "kaldifst/python",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "b00e00c5b1c3b646bd6cf1cf1a4ea31bd4838fcc",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/b00e00c5b1c3b646bd6cf1cf1a4ea31bd4838fcc"
+    },
+    {
+      "path": "kaldifst/python/CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cb8a39d6f63070e3af4ca268c460d1c5b185f6f0",
+      "size": 82,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/cb8a39d6f63070e3af4ca268c460d1c5b185f6f0"
+    },
+    {
+      "path": "kaldifst/python/csrc",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "23362746aba78be61af626471efa22de2b302513",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/23362746aba78be61af626471efa22de2b302513"
+    },
+    {
+      "path": "kaldifst/python/csrc/CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f9195020e36ac304557436fdcb433644934d5311",
+      "size": 1355,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/f9195020e36ac304557436fdcb433644934d5311"
+    },
+    {
+      "path": "kaldifst/python/csrc/arc.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d5bcde83dda6d983965228de5afe0715b82aeb4f",
+      "size": 2383,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d5bcde83dda6d983965228de5afe0715b82aeb4f"
+    },
+    {
+      "path": "kaldifst/python/csrc/arc.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bebf6c0b8f2c11109e0d2a5c6210d7fccbb18704",
+      "size": 349,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/bebf6c0b8f2c11109e0d2a5c6210d7fccbb18704"
+    },
+    {
+      "path": "kaldifst/python/csrc/const-fst.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2d4120aec677c475e6113327cb4f875cc06faf06",
+      "size": 930,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2d4120aec677c475e6113327cb4f875cc06faf06"
+    },
+    {
+      "path": "kaldifst/python/csrc/const-fst.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f334768338924ef4b6e2f86d5ad062752112f0cc",
+      "size": 3304,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/f334768338924ef4b6e2f86d5ad062752112f0cc"
+    },
+    {
+      "path": "kaldifst/python/csrc/context-fst.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4aa1cbc86f096878249ca08f77ad91f13a304b8c",
+      "size": 2649,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/4aa1cbc86f096878249ca08f77ad91f13a304b8c"
+    },
+    {
+      "path": "kaldifst/python/csrc/context-fst.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "050f6257e02f21c791449ef66b7e5487483fd295",
+      "size": 378,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/050f6257e02f21c791449ef66b7e5487483fd295"
+    },
+    {
+      "path": "kaldifst/python/csrc/determinize-star.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b3d30e2c9a7b045d758a0475412792fa09d16ab",
+      "size": 2563,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b3d30e2c9a7b045d758a0475412792fa09d16ab"
+    },
+    {
+      "path": "kaldifst/python/csrc/determinize-star.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f2d7c39da18c200d13fd7c903ae2eed5a67b6d5d",
+      "size": 413,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/f2d7c39da18c200d13fd7c903ae2eed5a67b6d5d"
+    },
+    {
+      "path": "kaldifst/python/csrc/expanded-fst.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b81bedee4e029c95b5ae6abb51904f81c5c335ff",
+      "size": 457,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b81bedee4e029c95b5ae6abb51904f81c5c335ff"
+    },
+    {
+      "path": "kaldifst/python/csrc/expanded-fst.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "756add511edbd0eb874cec319e9ef1ae8a84ec4f",
+      "size": 1282,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/756add511edbd0eb874cec319e9ef1ae8a84ec4f"
+    },
+    {
+      "path": "kaldifst/python/csrc/float-weight.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b312022b0ba5817c860b4819b6ef667684ca7829",
+      "size": 2239,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b312022b0ba5817c860b4819b6ef667684ca7829"
+    },
+    {
+      "path": "kaldifst/python/csrc/float-weight.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "20d39b52093c2dbcb378b07c4d5eac27839129ef",
+      "size": 393,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/20d39b52093c2dbcb378b07c4d5eac27839129ef"
+    },
+    {
+      "path": "kaldifst/python/csrc/fst.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "240e94381719e1d221909a6ef05c8b9bdfa657e2",
+      "size": 7465,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/240e94381719e1d221909a6ef05c8b9bdfa657e2"
+    },
+    {
+      "path": "kaldifst/python/csrc/fst.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "624fe7b380d695a2721a7945ddc5d29d3ae9cabc",
+      "size": 13404,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/624fe7b380d695a2721a7945ddc5d29d3ae9cabc"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstarcsort.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d689bbb083164f72534981a4ab35620b0468c3b8",
+      "size": 2831,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d689bbb083164f72534981a4ab35620b0468c3b8"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstarcsort.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0e1d65d433aaace0dfe38f7a5cec3d9e69c145ea",
+      "size": 384,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/0e1d65d433aaace0dfe38f7a5cec3d9e69c145ea"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstcompile.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "26b9afe9805abdfe03a560e6b56266f088b09f9b",
+      "size": 6380,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/26b9afe9805abdfe03a560e6b56266f088b09f9b"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstcompile.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7081149a8dcceaff3d52a8b42601121618c8f8e3",
+      "size": 384,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/7081149a8dcceaff3d52a8b42601121618c8f8e3"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstconnect.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "18fd3d0c7a4a65fc197961022fd541bd39511b5d",
+      "size": 1584,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/18fd3d0c7a4a65fc197961022fd541bd39511b5d"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstconnect.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c6097f9497949a0186893ed03e9c74debe3e6cea",
+      "size": 384,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/c6097f9497949a0186893ed03e9c74debe3e6cea"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstdeterminize.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "17f87221011ac9366b92dbe815ba21f9b14b1145",
+      "size": 3544,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/17f87221011ac9366b92dbe815ba21f9b14b1145"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstdeterminize.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0c6c917ed22b0106e05f1c1491948f2a7adb9699",
+      "size": 404,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/0c6c917ed22b0106e05f1c1491948f2a7adb9699"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstdraw.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c99865813e60233bb0f1206c01e66abeb3f154df",
+      "size": 2071,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/c99865813e60233bb0f1206c01e66abeb3f154df"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstdraw.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3edc6c94082c5e940dabd9e13d97627d80e2a5fb",
+      "size": 5593,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3edc6c94082c5e940dabd9e13d97627d80e2a5fb"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstext-utils.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "845b85a2b482085db84e063bb5861b5b00e1dff7",
+      "size": 10118,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/845b85a2b482085db84e063bb5861b5b00e1dff7"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstext-utils.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "22bc966eadaab6a1343c406a34d6cbaaa28a7847",
+      "size": 393,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/22bc966eadaab6a1343c406a34d6cbaaa28a7847"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstinfo.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "77be56f3f5ca2b2ce05e11a87fdc9eb6f288005e",
+      "size": 279,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/77be56f3f5ca2b2ce05e11a87fdc9eb6f288005e"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstinfo.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "06d24f57edcc99a41d3019b6b48a1d3ce61c5fcf",
+      "size": 1731,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/06d24f57edcc99a41d3019b6b48a1d3ce61c5fcf"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstinvert.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "70f5570fbf1b2c3ccc3f983841b12aac354a695f",
+      "size": 1252,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/70f5570fbf1b2c3ccc3f983841b12aac354a695f"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstinvert.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "413f2e81d398c77e08ea093509dd5a38a8371d79",
+      "size": 379,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/413f2e81d398c77e08ea093509dd5a38a8371d79"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstminimize.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "00288a9658240ef72c1ce5298071a86f9ae46bce",
+      "size": 2243,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/00288a9658240ef72c1ce5298071a86f9ae46bce"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstminimize.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1bf4a6650c99931a77600774c9559e636b084bf2",
+      "size": 389,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/1bf4a6650c99931a77600774c9559e636b084bf2"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstreverse.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "20dc06850c2b5cae232a6741726cd21c9bdfc62d",
+      "size": 3618,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/20dc06850c2b5cae232a6741726cd21c9bdfc62d"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstreverse.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d638c2c1b069e50f502a74f899f26e41606cc4c1",
+      "size": 384,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d638c2c1b069e50f502a74f899f26e41606cc4c1"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstrmepsilon.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "900de6e1b485bdc085961a5b9852d5df369fb5e6",
+      "size": 2662,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/900de6e1b485bdc085961a5b9852d5df369fb5e6"
+    },
+    {
+      "path": "kaldifst/python/csrc/fstrmepsilon.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "48dce817390f7cdadad8f196debcf0ebedef967a",
+      "size": 394,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/48dce817390f7cdadad8f196debcf0ebedef967a"
+    },
+    {
+      "path": "kaldifst/python/csrc/kaldi-table.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e65112f7a272a99c8cebe4290f1e20abefdc9c07",
+      "size": 2899,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/e65112f7a272a99c8cebe4290f1e20abefdc9c07"
+    },
+    {
+      "path": "kaldifst/python/csrc/kaldi-table.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b9838bcc001718594343020243fc5cf933088446",
+      "size": 388,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b9838bcc001718594343020243fc5cf933088446"
+    },
+    {
+      "path": "kaldifst/python/csrc/kaldifst.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7417a0cadd481537530e5221db11a943e9778ca3",
+      "size": 2230,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/7417a0cadd481537530e5221db11a943e9778ca3"
+    },
+    {
+      "path": "kaldifst/python/csrc/kaldifst.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b5de2dc4537cc70e2a42906baa8b07287f73169",
+      "size": 411,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3b5de2dc4537cc70e2a42906baa8b07287f73169"
+    },
+    {
+      "path": "kaldifst/python/csrc/lattice-utils.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0e88d08f67ddba241a36b2d4171ff0a5639458f7",
+      "size": 2695,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/0e88d08f67ddba241a36b2d4171ff0a5639458f7"
+    },
+    {
+      "path": "kaldifst/python/csrc/lattice-utils.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bd932e0d8d67f274bea9ff5cdb664ed021062d6e",
+      "size": 392,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/bd932e0d8d67f274bea9ff5cdb664ed021062d6e"
+    },
+    {
+      "path": "kaldifst/python/csrc/lattice-weight.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b96f40dbc087a58530605125133203ae359d0019",
+      "size": 2138,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b96f40dbc087a58530605125133203ae359d0019"
+    },
+    {
+      "path": "kaldifst/python/csrc/lattice-weight.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "91d2d2571ec43ef62f27b5d20c40376768cf4f35",
+      "size": 397,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/91d2d2571ec43ef62f27b5d20c40376768cf4f35"
+    },
+    {
+      "path": "kaldifst/python/csrc/mutable-fst.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b31ce7262f3156651bdab9b310f76a24475f2595",
+      "size": 415,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b31ce7262f3156651bdab9b310f76a24475f2595"
+    },
+    {
+      "path": "kaldifst/python/csrc/mutable-fst.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "321180a67fb0e3df2b2b0e35c06a98d876e2385c",
+      "size": 4260,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/321180a67fb0e3df2b2b0e35c06a98d876e2385c"
+    },
+    {
+      "path": "kaldifst/python/csrc/pre-determinize.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "15ebde8047e5a5f5165e85b70f9c4d63e47b98de",
+      "size": 2575,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/15ebde8047e5a5f5165e85b70f9c4d63e47b98de"
+    },
+    {
+      "path": "kaldifst/python/csrc/pre-determinize.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "39f5108712933c76bcc363e4c119a6dcd6baa8e8",
+      "size": 412,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/39f5108712933c76bcc363e4c119a6dcd6baa8e8"
+    },
+    {
+      "path": "kaldifst/python/csrc/shortest-path.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4b89b81d746ef356cf851f8cb69f1a6537a0d971",
+      "size": 3351,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/4b89b81d746ef356cf851f8cb69f1a6537a0d971"
+    },
+    {
+      "path": "kaldifst/python/csrc/shortest-path.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "60c21b4a14942f487542453c2c864a0b05d65883",
+      "size": 1009,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/60c21b4a14942f487542453c2c864a0b05d65883"
+    },
+    {
+      "path": "kaldifst/python/csrc/symbol-table.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "95833936761cc0358c7b2338e7983001f310f865",
+      "size": 6036,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/95833936761cc0358c7b2338e7983001f310f865"
+    },
+    {
+      "path": "kaldifst/python/csrc/symbol-table.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "404091322b21b42f7f94c5164c9a34c3a8049a3b",
+      "size": 393,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/404091322b21b42f7f94c5164c9a34c3a8049a3b"
+    },
+    {
+      "path": "kaldifst/python/csrc/table-matcher.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7dd2b5b04b8954bab59b2e2b60e8d0e8ecdfbb61",
+      "size": 3658,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/7dd2b5b04b8954bab59b2e2b60e8d0e8ecdfbb61"
+    },
+    {
+      "path": "kaldifst/python/csrc/table-matcher.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "70c9ad593df6d9866f82a37286867c1e6e401718",
+      "size": 401,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/70c9ad593df6d9866f82a37286867c1e6e401718"
+    },
+    {
+      "path": "kaldifst/python/csrc/text-normalizer.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "18ce8891d3b25e85545d7b90b685356acd799f38",
+      "size": 1112,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/18ce8891d3b25e85545d7b90b685356acd799f38"
+    },
+    {
+      "path": "kaldifst/python/csrc/text-normalizer.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "886a662aba795c61cb545826e246eec96d0643df",
+      "size": 347,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/886a662aba795c61cb545826e246eec96d0643df"
+    },
+    {
+      "path": "kaldifst/python/csrc/vector-fst.cc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cc1f7ce3e37ad285638662b069794c2a277bbf57",
+      "size": 2606,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/cc1f7ce3e37ad285638662b069794c2a277bbf57"
+    },
+    {
+      "path": "kaldifst/python/csrc/vector-fst.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "05a4824045fefe88ee81e4c1c9239e68c391adab",
+      "size": 5512,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/05a4824045fefe88ee81e4c1c9239e68c391adab"
+    },
+    {
+      "path": "kaldifst/python/kaldifst",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "48041f8892c2344a7cbaedc8013e6d9ab0d54ac6",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/48041f8892c2344a7cbaedc8013e6d9ab0d54ac6"
+    },
+    {
+      "path": "kaldifst/python/kaldifst/__init__.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ef46c50e573bf0f91a9b29fdc60799c9a04e9bca",
+      "size": 840,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/ef46c50e573bf0f91a9b29fdc60799c9a04e9bca"
+    },
+    {
+      "path": "kaldifst/python/kaldifst/iterator.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2c38dffea2fa93695d00041b830b28bbec9a7508",
+      "size": 1955,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2c38dffea2fa93695d00041b830b28bbec9a7508"
+    },
+    {
+      "path": "kaldifst/python/kaldifst/lattice_to_nbest.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9eccb87edc377ceaa30f433ec8856fff4ee49e98",
+      "size": 2936,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/9eccb87edc377ceaa30f433ec8856fff4ee49e98"
+    },
+    {
+      "path": "kaldifst/python/kaldifst/table_types.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "329494e45482e812e03d9ba17d543ac73126d60c",
+      "size": 4889,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/329494e45482e812e03d9ba17d543ac73126d60c"
+    },
+    {
+      "path": "kaldifst/python/kaldifst/utils",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3529b191a425b2e846a2c5b159f40d1b5dfbe676",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/3529b191a425b2e846a2c5b159f40d1b5dfbe676"
+    },
+    {
+      "path": "kaldifst/python/kaldifst/utils/__init__.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "833a9aae40e3c9a7ca25e0d7d52b104165950ff1",
+      "size": 48,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/833a9aae40e3c9a7ca25e0d7d52b104165950ff1"
+    },
+    {
+      "path": "kaldifst/python/kaldifst/utils/k2_converter.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b2bcfffff6b808e86f0893a12ed9bb9fa383555e",
+      "size": 4434,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/b2bcfffff6b808e86f0893a12ed9bb9fa383555e"
+    },
+    {
+      "path": "kaldifst/python/tests",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "33ba4d4ac239dc651d3d60ce0063894952d50c47",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/33ba4d4ac239dc651d3d60ce0063894952d50c47"
+    },
+    {
+      "path": "kaldifst/python/tests/CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cca22cbd663c95df7c43b25b40b56e8cea8dd69b",
+      "size": 951,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/cca22cbd663c95df7c43b25b40b56e8cea8dd69b"
+    },
+    {
+      "path": "kaldifst/python/tests/test_arc.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5c81019b1648f0dd30cf6005d6994bd2bbabb0a3",
+      "size": 683,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/5c81019b1648f0dd30cf6005d6994bd2bbabb0a3"
+    },
+    {
+      "path": "kaldifst/python/tests/test_arc_sort.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3d7d3099dbf4a68006ea109c1ab21618af8e7580",
+      "size": 1091,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/3d7d3099dbf4a68006ea109c1ab21618af8e7580"
+    },
+    {
+      "path": "kaldifst/python/tests/test_compile.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6c9bf8c31e13780a6cd08a029a2fff8cd200bf44",
+      "size": 808,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/6c9bf8c31e13780a6cd08a029a2fff8cd200bf44"
+    },
+    {
+      "path": "kaldifst/python/tests/test_compose.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "076569ad56200d4c590c55043ef645695b81b5fe",
+      "size": 1738,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/076569ad56200d4c590c55043ef645695b81b5fe"
+    },
+    {
+      "path": "kaldifst/python/tests/test_determinize.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0606f26db3f93080045b22b1c751927ec958d56a",
+      "size": 1145,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/0606f26db3f93080045b22b1c751927ec958d56a"
+    },
+    {
+      "path": "kaldifst/python/tests/test_determinize_star.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0c9dfb707d02e251e6bbe682be503b52ecd4f283",
+      "size": 2082,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/0c9dfb707d02e251e6bbe682be503b52ecd4f283"
+    },
+    {
+      "path": "kaldifst/python/tests/test_float_weight.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cb302b1765c0fcb09e00d43f334136032f8a80d8",
+      "size": 1168,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/cb302b1765c0fcb09e00d43f334136032f8a80d8"
+    },
+    {
+      "path": "kaldifst/python/tests/test_invert.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2316f16194ef423514ca746b6503116edfa18f81",
+      "size": 1144,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2316f16194ef423514ca746b6503116edfa18f81"
+    },
+    {
+      "path": "kaldifst/python/tests/test_k2_converter.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d4bd2cf505b0ed93b4ecfe3de771c878f3e0d4cf",
+      "size": 1509,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/d4bd2cf505b0ed93b4ecfe3de771c878f3e0d4cf"
+    },
+    {
+      "path": "kaldifst/python/tests/test_minimize.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "086b4a106ddfd298b7df7188ff56930a99044ca7",
+      "size": 2042,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/086b4a106ddfd298b7df7188ff56930a99044ca7"
+    },
+    {
+      "path": "kaldifst/python/tests/test_minimize_encoded.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ce6666d46a2794757ffe5a9e5cc5896557aff990",
+      "size": 637,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/ce6666d46a2794757ffe5a9e5cc5896557aff990"
+    },
+    {
+      "path": "kaldifst/python/tests/test_reverse.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "697cbda32bd167cf263ebdbc270bd4ea56f67ada",
+      "size": 1063,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/697cbda32bd167cf263ebdbc270bd4ea56f67ada"
+    },
+    {
+      "path": "kaldifst/python/tests/test_rmepsilon.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2bc2e0b96b4351099594e2ead6d3c84778c4a487",
+      "size": 1040,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/2bc2e0b96b4351099594e2ead6d3c84778c4a487"
+    },
+    {
+      "path": "kaldifst/python/tests/test_std_const_fst.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ebb01d4c1acdbe0773b2ae1125edcf7e0cfaad38",
+      "size": 1171,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/ebb01d4c1acdbe0773b2ae1125edcf7e0cfaad38"
+    },
+    {
+      "path": "kaldifst/python/tests/test_std_vector_fst.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5b45c4df82cdf573fc1086d1e181ff073fda5361",
+      "size": 1589,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/5b45c4df82cdf573fc1086d1e181ff073fda5361"
+    },
+    {
+      "path": "kaldifst/python/tests/test_symbol_table.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dbb0decbf11ecb51f132334cdfa9cb36655ec747",
+      "size": 1882,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/dbb0decbf11ecb51f132334cdfa9cb36655ec747"
+    },
+    {
+      "path": "kaldifst/python/tests/test_vector_fst_io.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "235ab49a70ebbb909b457297f905cb602366a5fb",
+      "size": 1812,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/235ab49a70ebbb909b457297f905cb602366a5fb"
+    },
+    {
+      "path": "pyproject.toml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0d80ed4d225eb14e1bcbc93dad4a563ca0ca81c7",
+      "size": 109,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/0d80ed4d225eb14e1bcbc93dad4a563ca0ca81c7"
+    },
+    {
+      "path": "scripts",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3a41ad6162c9a8ec3ead1ed218120974dd68c083",
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/trees/3a41ad6162c9a8ec3ead1ed218120974dd68c083"
+    },
+    {
+      "path": "scripts/check_style_cpplint.sh",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "418a0c90c20d1563e00df8bd43d65e4011d76e59",
+      "size": 3055,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/418a0c90c20d1563e00df8bd43d65e4011d76e59"
+    },
+    {
+      "path": "scripts/utils.sh",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fb424a7b8541c5777c1c6ddd215f1b8b3f389d6d",
+      "size": 292,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/fb424a7b8541c5777c1c6ddd215f1b8b3f389d6d"
+    },
+    {
+      "path": "setup.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8742d035d9795c560673e66814fa5c093ce66b93",
+      "size": 4802,
+      "url": "https://api.github.com/repos/csukuangfj/kaldifst/git/blobs/8742d035d9795c560673e66814fa5c093ce66b93"
+    }
+  ],
+  "truncated": false
+}

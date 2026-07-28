@@ -21,7 +21,7 @@ lm_url = "http://localhost:1234"
 lang   = "auto"
 energy_threshold = 0.01
 vad_silence_ms   = 800
-lm_model = "gemma-4-e2b-it"
+lm_model = "qwen/qwen3.5-9b"
 ptt_key = "RightAlt"
 asr_backend = "sense-voice"
 no_llm = false
@@ -35,7 +35,8 @@ no_llm = false
 #                    中文场景建议下载 lexicon-zh.txt
 #
 # 2. replace.fst   — 你的专业词汇替换规则，由 tools/build_hr_rules.py 生成。
-#                    编辑 tools/build_hr_rules.py → 运行 python tools/build_hr_rules.py
+#                    编辑 tools/user-words.txt → 运行
+#                    tools/.venv/Scripts/python.exe tools/build_hr_rules.py
 #
 hr_lexicon   = "models/hr/lexicon.txt"
 hr_rule_fsts = "models/hr/replace.fst"

@@ -6,6 +6,6 @@ Cargo.lock
 auto-voice.exe
 *.mp3
 models/
-*.py
 *.7z
 *.whl
+tools/.venv/

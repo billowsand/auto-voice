@@ -1,0 +1,22 @@
+# 同音字 / 拼音 → 汉字 替换规则
+#
+# 每行一条规则。两种格式都可以：
+#
+#   1) 拼音串<TAB>目标汉字
+#          xuan2jie4\t玄戒
+#
+#   2) pynini 风格（与 sherpa-onnx colab 教程一致）
+#          pynini.cross("xuan2jie4", "玄戒")
+#
+# 编辑后运行：
+#     tools/.venv/Scripts/python.exe tools/build_hr_rules.py
+#
+# （需要 kaldifst，只有 CPython 3.8-3.13 有预编译 wheel；tools/.venv 就是为此
+#   建的 3.11 环境。用系统的 python 3.14 会退化成源码编译并失败。）
+#
+# 生成的文件会覆盖 models/hr/replace.fst，auto-voice 下次启动时自动生效。
+# 拼音音调用数字表示：ma1=妈, ma2=麻, ma3=马, ma4=骂, ma5=· (轻声)
+
+pynini.cross("xuan2jie4",          "玄戒")
+pynini.cross("xuan2jie4xin1pian1", "玄戒芯片")
+pynini.cross("xuan2jie4xing1pian1","玄戒芯片")
