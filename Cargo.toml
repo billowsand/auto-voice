@@ -84,7 +84,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_System_LibraryLoader",
 ] }
-windows = { version = "0.58", features = [
+windows = { version = "0.62", features = [
     "Foundation_Numerics",
     "Win32_Foundation",
     "Win32_System_Com",
