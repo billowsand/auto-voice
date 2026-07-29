@@ -103,6 +103,9 @@ windows = { version = "0.58", features = [
 # sherpa-onnx 官方 Rust crate，shared = 使用预编译 DLL
 sherpa-onnx = { version = "1", default-features = false }
 
+[build-dependencies]
+winresource = "0.1.31"
+
 [profile.release]
 opt-level = 3        # 最高速度优化
 lto = "thin"         # 比 true (fat LTO) 快很多，体积接近

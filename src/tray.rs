@@ -99,40 +99,10 @@ pub fn run_tray(cfg: TrayConfig) -> Result<()> {
 
 // ── 图标、隐藏控制台 ─────────────────────────────────────────────────────────
 
-/// 生成 32×32 RGBA 图标：深色背景 + 红色圆点（表示录音状态）
+/// Load the bundled 32×32 RGBA application icon.
 fn build_icon() -> tray_icon::Icon {
-    const SIZE: u32 = 32;
-    let mut rgba = vec![0u8; (SIZE * SIZE * 4) as usize];
-
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let cx = x as f32 - SIZE as f32 / 2.0 + 0.5;
-            let cy = y as f32 - SIZE as f32 / 2.0 + 0.5;
-            let dist = (cx * cx + cy * cy).sqrt();
-            let idx = ((y * SIZE + x) * 4) as usize;
-
-            if dist < 13.0 {
-                rgba[idx] = 50;
-                rgba[idx + 1] = 50;
-                rgba[idx + 2] = 50;
-                rgba[idx + 3] = 255;
-            }
-            if dist < 9.0 {
-                rgba[idx] = 220;
-                rgba[idx + 1] = 50;
-                rgba[idx + 2] = 50;
-                rgba[idx + 3] = 255;
-            }
-            if dist < 4.0 {
-                rgba[idx] = 255;
-                rgba[idx + 1] = 120;
-                rgba[idx + 2] = 120;
-                rgba[idx + 3] = 255;
-            }
-        }
-    }
-
-    tray_icon::Icon::from_rgba(rgba, SIZE, SIZE).expect("Failed to create tray icon")
+    const ICON_RGBA: &[u8; 32 * 32 * 4] = include_bytes!("../assets/icons/auto-voice-32.rgba");
+    tray_icon::Icon::from_rgba(ICON_RGBA.to_vec(), 32, 32).expect("Failed to create tray icon")
 }
 
 #[cfg(windows)]
