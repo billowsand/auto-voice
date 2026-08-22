@@ -1,42 +1,17 @@
-# ASR 后端: "sense-voice"（默认）或 "funasr-nano"
-# asr_backend = "funasr-nano"
-
-# ── SenseVoice 模型路径 ──────────────────────────────────────────────────────
-model  = "models/sense-voice/model.int8.onnx"
+asr_backend = "sense-voice"
+model = "models/sense-voice/model.int8.onnx"
 tokens = "models/sense-voice/tokens.txt"
-
-# ── FunASR-nano 模型路径（当 asr_backend = "funasr-nano" 时生效）────────────
-# funasr_encoder_adaptor = "models/funasr-nano/encoder_adaptor.int8.onnx"
-# funasr_llm             = "models/funasr-nano/llm.int8.onnx"
-# funasr_embedding       = "models/funasr-nano/embedding.int8.onnx"
-# funasr_tokenizer       = "models/funasr-nano"
-# funasr_itn             = true
 speaker_segmentation_model = "models/speaker-diarization/sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx"
 speaker_embedding_model = "models/speaker-diarization/3dspeaker/3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx"
-# speaker_num_clusters = 2
-# speaker_threshold = 0.5
-# speaker_min_duration_on = 0.2
-# speaker_min_duration_off = 0.5
-lm_url = "http://localhost:1234"
-lang   = "auto"
-energy_threshold = 0.01
-vad_silence_ms   = 800
+lm_url = "http://localhost:12345"
+lang = "auto"
 lm_model = "qwen/qwen3.5-9b"
-ptt_key = "RightAlt"
-asr_backend = "sense-voice"
 no_llm = false
-
-# ── 同音字替换（专业词汇纠正）─────────────────────────────────────────────────
-# 启用后，ASR 识别结果会根据词典和 FST 规则自动替换同音专业词汇。
-# 两个文件都需要填写才能生效。
-#
-# 1. lexicon.txt   — 通用发音词典，从以下地址下载对应语言的文件：
-#                    https://github.com/k2-fsa/sherpa-onnx/releases/tag/hr-files
-#                    中文场景建议下载 lexicon-zh.txt
-#
-# 2. replace.fst   — 你的专业词汇替换规则，由 tools/build_hr_rules.py 生成。
-#                    编辑 tools/user-words.txt → 运行
-#                    tools/.venv/Scripts/python.exe tools/build_hr_rules.py
-#
-hr_lexicon   = "models/hr/lexicon.txt"
+lmstudio_auto_start = true
+lmstudio_model = "qwen/qwen3.5-9b"
+lmstudio_context_length = 4096
+energy_threshold = 0.009999999776482582
+vad_silence_ms = 800
+ptt_key = "RightAlt"
+hr_lexicon = "models/hr/lexicon.txt"
 hr_rule_fsts = "models/hr/replace.fst"

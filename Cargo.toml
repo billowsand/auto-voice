@@ -10,7 +10,7 @@ repository = "https://github.com/billowsand/auto-voice"
 homepage = "https://github.com/billowsand/auto-voice"
 keywords = ["speech-to-text", "asr", "windows", "sensevoice", "sherpa-onnx"]
 categories = ["command-line-utilities", "multimedia::audio"]
-rust-version = "1.85"
+rust-version = "1.92"
 publish = false
 exclude = [
     ".claude/",
@@ -34,7 +34,16 @@ tracing-appender = "0.2"
 serde       = { version = "1", features = ["derive"] }
 serde_json  = "1"
 toml        = "0.8"
-image       = { version = "0.25", default-features = false, features = ["tga"] }
+directories = "6"
+
+# 跨平台桌面 UI。Glow 比默认 WGPU 依赖更轻，适合常驻托盘应用。
+eframe = { version = "0.35", default-features = false, features = [
+    "accesskit",
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
 
 # 音频解码 (MP3/WAV/FLAC/OGG/M4A/MKV/AIFF/…)
 symphonia = { version = "0.5", features = [
@@ -78,26 +87,9 @@ tray-icon = "0.17"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
     "Win32_UI_WindowsAndMessaging",
-    "Win32_UI_HiDpi",
-    "Win32_UI_Shell",              # 拖放: DragAcceptFiles / DragQueryFileW / DragFinish
-    "Win32_Graphics_Gdi",
     "Win32_Foundation",
-    "Win32_System_LibraryLoader",
-] }
-windows = { version = "0.58", features = [
-    "Foundation_Numerics",
-    "Win32_Foundation",
-    "Win32_System_Com",
-    "Win32_System_LibraryLoader",
-    "Win32_UI_Controls",
-    "Win32_UI_HiDpi",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_Graphics_Direct2D",
-    "Win32_Graphics_Direct2D_Common",
-    "Win32_Graphics_DirectWrite",
-    "Win32_Graphics_Dwm",
-    "Win32_Graphics_Dxgi_Common",
     "Win32_Graphics_Gdi",
+    "Win32_System_Console",
 ] }
 
 # sherpa-onnx 官方 Rust crate，shared = 使用预编译 DLL

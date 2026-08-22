@@ -1,926 +1,724 @@
-//! Win32 OSD — 浮于所有窗口上方的状态提示。
+//! The push-to-talk overlay: a floating pill that pops next to the caret while the hotkey is
+//! held, follows the voice with a live waveform, shows what was recognised, and fades away.
 //!
-//! 这一版改成真正的胶囊外轮廓窗口，并把视觉拆成多层玻璃结构：
-//! - 外壳 / 内胆 / 顶部釉面 / 底部反射
-//! - 左侧状态透镜 + 右侧波形轨道
-//! - 保留轻量状态机：Hidden → Recording → Processing → Done(1.8s) → Hidden
-
-#[cfg(windows)]
-pub use windows_impl::*;
-
-#[cfg(not(windows))]
-pub use stub_impl::*;
-
-#[cfg(windows)]
-mod windows_impl {
-    use std::cell::RefCell;
-    use std::sync::atomic::{AtomicU32, Ordering};
-    use std::sync::{Mutex, OnceLock};
-    use std::time::Instant;
-
-    use image::ImageFormat;
-    use windows::core::{w, Interface, Result as WinResult, PCWSTR};
-    use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
-    use windows::Win32::Graphics::Direct2D::Common::{
-        D2D1_ALPHA_MODE_IGNORE, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_PIXEL_FORMAT,
-        D2D_POINT_2F, D2D_RECT_F, D2D_SIZE_U,
-    };
-    use windows::Win32::Graphics::Direct2D::{
-        D2D1CreateFactory, ID2D1Bitmap, ID2D1Factory, ID2D1HwndRenderTarget, ID2D1RenderTarget,
-        ID2D1SolidColorBrush, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
-        D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_BITMAP_PROPERTIES, D2D1_ELLIPSE,
-        D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_FEATURE_LEVEL_DEFAULT,
-        D2D1_HWND_RENDER_TARGET_PROPERTIES, D2D1_PRESENT_OPTIONS_NONE,
-        D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT,
-    };
-    use windows::Win32::Graphics::DirectWrite::{
-        DWriteCreateFactory, IDWriteFactory, DWRITE_FACTORY_TYPE_SHARED,
-    };
-    use windows::Win32::Graphics::Gdi::{
-        CreateRoundRectRgn, InvalidateRect, SetWindowRgn, ValidateRect,
-    };
-    use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    use windows::Win32::UI::HiDpi::{
-        GetDpiForSystem, GetDpiForWindow, SetProcessDpiAwareness, PROCESS_PER_MONITOR_DPI_AWARE,
-    };
-    use windows::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetSystemMetrics,
-        KillTimer, PostMessageW, RegisterClassExW, SetTimer, SetWindowLongPtrW, SetWindowPos,
-        ShowWindow, CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, HWND_TOPMOST, MSG, SM_CXSCREEN,
-        SM_CYSCREEN, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNOACTIVATE,
-        WM_DESTROY, WM_NCDESTROY, WM_PAINT, WM_TIMER, WNDCLASSEXW, WS_EX_NOACTIVATE,
-        WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
-    };
-
-    const BASE_PLATE_TGA: &[u8] = include_bytes!("../assets/osd_pill_base.tga");
-
-    // 绘制坐标系基于原始设计尺寸（缩小一半）
-    const BASE_WIN_W: i32 = 180;
-    const BASE_WIN_H: i32 = 40;
-
-    fn dpi_scale_factor(dpi: u32) -> f32 {
-        dpi as f32 / 96.0
-    }
-
-    // 获取系统 DPI（用于初始窗口创建）
-    fn get_system_dpi() -> u32 {
-        unsafe { GetDpiForSystem().max(96) }
-    }
-
-    fn get_window_dpi(hwnd: HWND) -> u32 {
-        unsafe { GetDpiForWindow(hwnd).max(96) }
-    }
-
-    const STATE_HIDDEN: u32 = 0;
-    const STATE_RECORDING: u32 = 1;
-    const STATE_PROCESSING: u32 = 2;
-    const STATE_DONE: u32 = 3;
-
-    const WM_USER_STATE: u32 = 0x0401;
-    const TIMER_DONE_HIDE: usize = 1;
-    const TIMER_ANIM: usize = 2;
-
-    static G_STATE: AtomicU32 = AtomicU32::new(STATE_HIDDEN);
-    static G_FRAME: AtomicU32 = AtomicU32::new(0);
-    static G_LEVEL: AtomicU32 = AtomicU32::new(0);
-    static G_ELAPSED_MS: AtomicU32 = AtomicU32::new(0);
-    static G_HWND: OnceLock<Mutex<isize>> = OnceLock::new();
-    static G_RECORDING_START: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
-
-    fn hwnd_cell() -> &'static Mutex<isize> {
-        G_HWND.get_or_init(|| Mutex::new(0))
-    }
-
-    fn recording_start_cell() -> &'static Mutex<Option<Instant>> {
-        G_RECORDING_START.get_or_init(|| Mutex::new(None))
-    }
-
-    fn current_hwnd() -> HWND {
-        HWND(*hwnd_cell().lock().unwrap() as *mut std::ffi::c_void)
-    }
-
-    #[derive(Clone)]
-    pub struct OsdHandle;
-
-    impl OsdHandle {
-        pub fn set_recording(&self) {
-            post_state(STATE_RECORDING);
-        }
-
-        pub fn set_processing(&self) {
-            post_state(STATE_PROCESSING);
-        }
-
-        pub fn set_done(&self) {
-            post_state(STATE_DONE);
-        }
-
-        #[allow(dead_code)]
-        pub fn hide(&self) {
-            post_state(STATE_HIDDEN);
-        }
-
-        /// 检查是否可以开始新录音（在 PROCESSING/DONE 状态下返回 false）
-        pub fn can_recording_start(&self) -> bool {
-            let state = G_STATE.load(Ordering::SeqCst);
-            state == STATE_HIDDEN
-        }
-
-        pub fn set_level(&self, level: f32) {
-            let scaled = (level.clamp(0.0, 1.0) * 1000.0) as u32;
-            G_LEVEL.store(scaled, Ordering::SeqCst);
-            let hwnd = current_hwnd();
-            if !hwnd.is_invalid() && G_STATE.load(Ordering::SeqCst) == STATE_RECORDING {
-                unsafe {
-                    let _ = InvalidateRect(hwnd, None, false);
-                }
-            }
-        }
-    }
-
-    fn post_state(state: u32) {
-        let now = Instant::now();
-        match state {
-            STATE_RECORDING => {
-                *recording_start_cell().lock().unwrap() = Some(now);
-                G_ELAPSED_MS.store(0, Ordering::SeqCst);
-            }
-            STATE_PROCESSING | STATE_DONE => {
-                if let Some(start) = recording_start_cell().lock().unwrap().take() {
-                    G_ELAPSED_MS.store(
-                        now.duration_since(start).as_millis().min(u32::MAX as u128) as u32,
-                        Ordering::SeqCst,
-                    );
-                }
-            }
-            STATE_HIDDEN => {
-                *recording_start_cell().lock().unwrap() = None;
-                G_ELAPSED_MS.store(0, Ordering::SeqCst);
-            }
-            _ => {}
-        }
-        G_STATE.store(state, Ordering::SeqCst);
-        if state != STATE_RECORDING {
-            G_LEVEL.store(0, Ordering::SeqCst);
-        }
-        let hwnd = current_hwnd();
-        if !hwnd.is_invalid() {
-            unsafe {
-                let _ = PostMessageW(hwnd, WM_USER_STATE, WPARAM(0), LPARAM(0));
-            }
-        }
-    }
-
-    pub fn spawn_osd() -> OsdHandle {
-        std::thread::spawn(run_osd_window);
-        for _ in 0..50 {
-            if *hwnd_cell().lock().unwrap() != 0 {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        OsdHandle
-    }
-
-    #[derive(Clone)]
-    struct Theme {
-        shell_outer: D2D1_COLOR_F,
-        shell_inner: D2D1_COLOR_F,
-        shell_core: D2D1_COLOR_F,
-        lens_outer: D2D1_COLOR_F,
-        glaze: D2D1_COLOR_F,
-        reflection: D2D1_COLOR_F,
-        border_outer: D2D1_COLOR_F,
-        border_inner: D2D1_COLOR_F,
-        title: D2D1_COLOR_F,
-        subtitle: D2D1_COLOR_F,
-        accent: D2D1_COLOR_F,
-        accent_soft: D2D1_COLOR_F,
-        track: D2D1_COLOR_F,
-        track_glow: D2D1_COLOR_F,
-        button_face: D2D1_COLOR_F,
-        button_border: D2D1_COLOR_F,
-        danger_face: D2D1_COLOR_F,
-    }
-
-    struct Renderer {
-        target: ID2D1HwndRenderTarget,
-        render_target: ID2D1RenderTarget,
-        baseplate: ID2D1Bitmap,
-        title_brush: ID2D1SolidColorBrush,
-        subtitle_brush: ID2D1SolidColorBrush,
-        border_outer_brush: ID2D1SolidColorBrush,
-        border_inner_brush: ID2D1SolidColorBrush,
-        accent_brush: ID2D1SolidColorBrush,
-        accent_soft_brush: ID2D1SolidColorBrush,
-        track_brush: ID2D1SolidColorBrush,
-        track_glow_brush: ID2D1SolidColorBrush,
-        shell_outer_brush: ID2D1SolidColorBrush,
-        shell_inner_brush: ID2D1SolidColorBrush,
-        shell_core_brush: ID2D1SolidColorBrush,
-        lens_outer_brush: ID2D1SolidColorBrush,
-        glaze_brush: ID2D1SolidColorBrush,
-        reflection_brush: ID2D1SolidColorBrush,
-        button_face_brush: ID2D1SolidColorBrush,
-        button_border_brush: ID2D1SolidColorBrush,
-        danger_face_brush: ID2D1SolidColorBrush,
-        dpi_scale: f32,
-    }
-
-    thread_local! {
-        static RENDERER: RefCell<Option<Renderer>> = const { RefCell::new(None) };
-    }
-
-    fn run_osd_window() {
-        unsafe {
-            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-            let _ = SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-            let hinstance = GetModuleHandleW(None).unwrap_or_default();
-
-            let wc = WNDCLASSEXW {
-                cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
-                style: CS_HREDRAW | CS_VREDRAW,
-                lpfnWndProc: Some(wnd_proc),
-                cbClsExtra: 0,
-                cbWndExtra: 0,
-                hInstance: hinstance.into(),
-                hIcon: Default::default(),
-                hCursor: Default::default(),
-                hbrBackground: Default::default(),
-                lpszMenuName: PCWSTR::null(),
-                lpszClassName: w!("AutoVoiceOSD"),
-                hIconSm: Default::default(),
-            };
-            let _ = RegisterClassExW(&wc);
-
-            // 获取系统 DPI 用于初始窗口创建
-            let system_dpi = get_system_dpi();
-            let scale = dpi_scale_factor(system_dpi);
-            tracing::info!(
-                "[OSD DPI] System DPI: {}, BASE: {}x{}, scale: {}",
-                system_dpi,
-                BASE_WIN_W,
-                BASE_WIN_H,
-                scale
-            );
-
-            // DPI 缩放后的窗口尺寸
-            let win_w = (BASE_WIN_W as f32 * scale) as i32;
-            let win_h = (BASE_WIN_H as f32 * scale) as i32;
-            tracing::info!("[OSD DPI] Window pixel size: {}x{}", win_w, win_h);
-
-            if win_w <= 0 || win_h <= 0 {
-                tracing::error!("Invalid OSD window size: {}x{}", win_w, win_h);
-                return;
-            }
-
-            let screen_w = GetSystemMetrics(SM_CXSCREEN);
-            let screen_h = GetSystemMetrics(SM_CYSCREEN);
-            let x = (screen_w - win_w) / 2;
-            let y = (screen_h - win_h - (100.0 * scale) as i32).max((32.0 * scale) as i32);
-
-            let hwnd = match CreateWindowExW(
-                WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
-                w!("AutoVoiceOSD"),
-                w!("auto-voice"),
-                WS_POPUP,
-                x,
-                y,
-                win_w,
-                win_h,
-                None,
-                None,
-                hinstance,
-                None,
-            ) {
-                Ok(hwnd) => hwnd,
-                Err(e) => {
-                    tracing::error!("Failed to create OSD window: {:?}", e);
-                    return;
-                }
-            };
-
-            tracing::info!("OSD window created: {:?}", hwnd);
-
-            // 验证窗口实际 DPI
-            let window_dpi = get_window_dpi(hwnd);
-            tracing::info!(
-                "[OSD DPI] Window actual DPI: {}, scale: {}",
-                window_dpi,
-                dpi_scale_factor(window_dpi)
-            );
-
-            let rgn = CreateRoundRectRgn(0, 0, win_w + 1, win_h + 1, win_h / 2, win_h / 2);
-            let _ = SetWindowRgn(hwnd, rgn, true);
-            *hwnd_cell().lock().unwrap() = hwnd.0 as isize;
-
-            // 初始隐藏窗口，由 WM_USER_STATE (STATE_HIDDEN) 处理
-            let _ = ShowWindow(hwnd, SW_HIDE);
-            tracing::info!("OSD window hidden initially, entering message loop");
-
-            // 发送初始状态让消息循环处理
-            let _ = PostMessageW(hwnd, WM_USER_STATE, WPARAM(0), LPARAM(0));
-
-            let mut msg = MSG::default();
-            let mut count = 0;
-            loop {
-                let ret = GetMessageW(&mut msg, None, 0, 0);
-                tracing::info!("GetMessageW returned: {}", ret.0);
-                if ret.0 < 0 {
-                    tracing::error!("GetMessageW returned error: {}", ret.0);
-                    break;
-                }
-                if ret.0 == 0 {
-                    tracing::info!("Got WM_QUIT, exiting loop");
-                    break;
-                }
-                count += 1;
-                if count <= 10 {
-                    tracing::info!("OSD msg: {:04x}", msg.message);
-                }
-                DispatchMessageW(&msg);
-            }
-            tracing::info!("OSD message loop exited after {} messages", count);
-            *hwnd_cell().lock().unwrap() = 0;
-        }
-    }
-
-    unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-        match msg {
-            WM_USER_STATE => {
-                let state = G_STATE.load(Ordering::SeqCst);
-                tracing::info!("WM_USER_STATE: state={}", state);
-                if state == STATE_HIDDEN {
-                    let _ = KillTimer(hwnd, TIMER_DONE_HIDE);
-                    let _ = KillTimer(hwnd, TIMER_ANIM);
-                    let _ = ShowWindow(hwnd, SW_HIDE);
-                } else {
-                    let _ = SetWindowPos(
-                        hwnd,
-                        HWND_TOPMOST,
-                        0,
-                        0,
-                        0,
-                        0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
-                    );
-                    let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-
-                    if state == STATE_RECORDING || state == STATE_PROCESSING {
-                        let _ = KillTimer(hwnd, TIMER_DONE_HIDE);
-                        let _ = SetTimer(hwnd, TIMER_ANIM, 33, None);
-                    } else {
-                        let _ = KillTimer(hwnd, TIMER_ANIM);
-                        let _ = KillTimer(hwnd, TIMER_DONE_HIDE);
-                        let _ = SetTimer(hwnd, TIMER_DONE_HIDE, 1800, None);
-                    }
-                    let _ = InvalidateRect(hwnd, None, false);
-                }
-                LRESULT(0)
-            }
-            WM_TIMER => {
-                if wp.0 == TIMER_ANIM {
-                    G_FRAME.fetch_add(1, Ordering::SeqCst);
-                    let _ = InvalidateRect(hwnd, None, false);
-                } else if wp.0 == TIMER_DONE_HIDE {
-                    let _ = KillTimer(hwnd, TIMER_DONE_HIDE);
-                    G_STATE.store(STATE_HIDDEN, Ordering::SeqCst);
-                    let _ = ShowWindow(hwnd, SW_HIDE);
-                }
-                LRESULT(0)
-            }
-            WM_PAINT => {
-                tracing::info!("WM_PAINT received");
-                draw(hwnd);
-                tracing::info!("WM_PAINT handled");
-                LRESULT(0)
-            }
-            WM_NCDESTROY => {
-                RENDERER.with(|slot| {
-                    slot.borrow_mut().take();
-                });
-                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-                DefWindowProcW(hwnd, msg, wp, lp)
-            }
-            WM_DESTROY => {
-                windows::Win32::UI::WindowsAndMessaging::PostQuitMessage(0);
-                LRESULT(0)
-            }
-            _ => DefWindowProcW(hwnd, msg, wp, lp),
-        }
-    }
-
-    unsafe fn draw(hwnd: HWND) {
-        let result = with_renderer(hwnd, |renderer| {
-            let state = G_STATE.load(Ordering::SeqCst);
-            let frame = G_FRAME.load(Ordering::SeqCst);
-            let level = G_LEVEL.load(Ordering::SeqCst) as f32 / 1000.0;
-            let elapsed_ms = current_elapsed_ms(state);
-            let theme = theme_for_state(state);
-            let scale = renderer.dpi_scale;
-
-            tracing::info!(
-                "OSD draw: state={}, scale={}, baseplate={:?}",
-                state,
-                scale,
-                renderer.baseplate
-            );
-
-            renderer.target.BeginDraw();
-            renderer
-                .render_target
-                .SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
-            renderer.render_target.Clear(Some(&D2D1_COLOR_F {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: 0.0,
-            }));
-
-            renderer.shell_outer_brush.SetColor(&theme.shell_outer);
-            renderer.shell_inner_brush.SetColor(&theme.shell_inner);
-            renderer.shell_core_brush.SetColor(&theme.shell_core);
-            renderer.lens_outer_brush.SetColor(&theme.lens_outer);
-            renderer.glaze_brush.SetColor(&theme.glaze);
-            renderer.reflection_brush.SetColor(&theme.reflection);
-            renderer.border_outer_brush.SetColor(&theme.border_outer);
-            renderer.border_inner_brush.SetColor(&theme.border_inner);
-            renderer.title_brush.SetColor(&theme.title);
-            renderer.subtitle_brush.SetColor(&theme.subtitle);
-            renderer.accent_brush.SetColor(&theme.accent);
-            renderer.accent_soft_brush.SetColor(&theme.accent_soft);
-            renderer.track_brush.SetColor(&theme.track);
-            renderer.track_glow_brush.SetColor(&theme.track_glow);
-            renderer.button_face_brush.SetColor(&theme.button_face);
-            renderer.button_border_brush.SetColor(&theme.button_border);
-            renderer.danger_face_brush.SetColor(&theme.danger_face);
-
-            // 渲染目标坐标是 DIP（设备无关像素）
-            // pixelSize=540x120, dpiX/dpiY=144 意味着 DIP 尺寸 = 540/1.5 x 120/1.5 = 360x80
-            // 所以绘制坐标不应超过 DIP 范围: 0-360 宽, 0-80 高
-            // 但 baseplate 是 300x72 位图，绘制到 360x80 会变形
-            // 为了填充整个窗口（360x80 DIP），需要非均匀缩放
-            let outer = D2D_RECT_F {
-                left: 0.0,
-                top: 0.0,
-                right: BASE_WIN_W as f32,  // 360 DIP
-                bottom: BASE_WIN_H as f32, // 80 DIP
-            };
-            tracing::info!(
-                "[OSD DPI] DrawBitmap: base={}x{}, outer={}x{} DIP",
-                BASE_WIN_W,
-                BASE_WIN_H,
-                outer.right,
-                outer.bottom
-            );
-            renderer.render_target.DrawBitmap(
-                &renderer.baseplate,
-                Some(&outer),
-                1.0,
-                D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
-                None,
-            );
-
-            draw_status_lens(renderer, state, frame);
-            draw_signal_line(renderer, state, frame, level);
-            draw_timer(renderer, elapsed_ms);
-
-            let _ = renderer.target.EndDraw(None, None);
-            Ok(())
-        });
-
-        if let Err(e) = result {
-            tracing::error!("OSD draw error: {:?}", e);
-        }
-        let _ = ValidateRect(hwnd, None);
-    }
-
-    unsafe fn with_renderer<F>(hwnd: HWND, f: F) -> WinResult<()>
-    where
-        F: FnOnce(&mut Renderer) -> WinResult<()>,
-    {
-        RENDERER.with(|slot| {
-            if slot.borrow().is_none() {
-                tracing::info!("Creating OSD renderer for hwnd {:?}", hwnd);
-                match create_renderer(hwnd) {
-                    Ok(r) => {
-                        tracing::info!("OSD renderer created successfully");
-                        *slot.borrow_mut() = Some(r);
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to create OSD renderer: {:?}", e);
-                        return Err(e);
-                    }
-                }
-            }
-            let mut borrowed = slot.borrow_mut();
-            let renderer = borrowed.as_mut().expect("renderer must exist");
-            f(renderer)
-        })
-    }
-
-    unsafe fn create_renderer(hwnd: HWND) -> WinResult<Renderer> {
-        let factory: ID2D1Factory = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None)?;
-        let _dwrite_factory: IDWriteFactory = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
-
-        // 获取窗口实际 DPI（用于渲染缩放）
-        let dpi = GetDpiForWindow(hwnd).max(96);
-        let scale = dpi as f32 / 96.0;
-        tracing::info!(
-            "[OSD DPI] Renderer: dpi={}, scale={}, base={}x{}",
-            dpi,
-            scale,
-            BASE_WIN_W,
-            BASE_WIN_H
-        );
-
-        // 计算缩放后的像素尺寸（用于窗口和渲染目标）
-        let scaled_w = (BASE_WIN_W as f32 * scale) as u32;
-        let scaled_h = (BASE_WIN_H as f32 * scale) as u32;
-        tracing::info!(
-            "[OSD DPI] RenderTarget pixel size: {}x{}, dpi={}",
-            scaled_w,
-            scaled_h,
-            dpi
-        );
-
-        let render_props = D2D1_RENDER_TARGET_PROPERTIES {
-            r#type: D2D1_RENDER_TARGET_TYPE_DEFAULT,
-            pixelFormat: D2D1_PIXEL_FORMAT {
-                format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_UNKNOWN,
-                alphaMode: D2D1_ALPHA_MODE_IGNORE,
-            },
-            dpiX: dpi as f32,
-            dpiY: dpi as f32,
-            usage: Default::default(),
-            minLevel: D2D1_FEATURE_LEVEL_DEFAULT,
-        };
-        let hwnd_props = D2D1_HWND_RENDER_TARGET_PROPERTIES {
-            hwnd,
-            pixelSize: D2D_SIZE_U {
-                width: scaled_w,
-                height: scaled_h,
-            },
-            presentOptions: D2D1_PRESENT_OPTIONS_NONE,
-        };
-        let target = factory.CreateHwndRenderTarget(&render_props, &hwnd_props)?;
-        tracing::info!(
-            "OSD CreateHwndRenderTarget succeeded: {}x{}",
-            scaled_w,
-            scaled_h
-        );
-        let render_target: ID2D1RenderTarget = target.cast()?;
-        tracing::info!("OSD render_target cast succeeded");
-
-        tracing::info!("Loading baseplate bitmap...");
-        let baseplate = load_baseplate_bitmap(&render_target)?;
-        tracing::info!("OSD baseplate loaded successfully");
-
-        let title_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.95, 0.96, 0.98, 0.94), None)?;
-        let subtitle_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.92, 0.94, 0.97, 0.60), None)?;
-        let border_outer_brush =
-            render_target.CreateSolidColorBrush(&rgb(1.0, 1.0, 1.0, 0.18), None)?;
-        let border_inner_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.74, 0.84, 0.94, 0.16), None)?;
-        let accent_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.95, 0.47, 0.35, 1.0), None)?;
-        let accent_soft_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.95, 0.47, 0.35, 0.26), None)?;
-        let track_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.14, 0.19, 0.25, 0.96), None)?;
-        let track_glow_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.87, 0.93, 1.0, 0.10), None)?;
-        let shell_outer_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.08, 0.10, 0.13, 1.0), None)?;
-        let shell_inner_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.10, 0.13, 0.17, 1.0), None)?;
-        let shell_core_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.12, 0.16, 0.20, 1.0), None)?;
-        let lens_outer_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.16, 0.22, 0.29, 0.96), None)?;
-        let glaze_brush = render_target.CreateSolidColorBrush(&rgb(1.0, 1.0, 1.0, 0.08), None)?;
-        let reflection_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.70, 0.84, 0.96, 0.06), None)?;
-        let button_face_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.29, 0.33, 0.36, 0.92), None)?;
-        let button_border_brush =
-            render_target.CreateSolidColorBrush(&rgb(1.0, 1.0, 1.0, 0.14), None)?;
-        let danger_face_brush =
-            render_target.CreateSolidColorBrush(&rgb(0.44, 0.16, 0.18, 0.94), None)?;
-
-        Ok(Renderer {
-            target,
-            render_target,
-            baseplate,
-            title_brush,
-            subtitle_brush,
-            border_outer_brush,
-            border_inner_brush,
-            accent_brush,
-            accent_soft_brush,
-            track_brush,
-            track_glow_brush,
-            shell_outer_brush,
-            shell_inner_brush,
-            shell_core_brush,
-            lens_outer_brush,
-            glaze_brush,
-            reflection_brush,
-            button_face_brush,
-            button_border_brush,
-            danger_face_brush,
-            dpi_scale: scale,
-        })
-    }
-
-    unsafe fn draw_status_lens(renderer: &Renderer, state: u32, frame: u32) {
-        // 坐标是 DIP（设计像素），Direct2D 根据 render target DPI 自动转换为物理像素
-        // 布局：填满整个 180×40 窗口（缩小一半）
-        let center = D2D_POINT_2F { x: 20.0, y: 20.0 }; // 居中偏左
-        let pulse = (frame as f32 * 0.12).sin() * 0.12 + 1.0;
-
-        // Outer glow ring
-        let outer_brush = match state {
-            STATE_RECORDING => &renderer.accent_soft_brush,
-            STATE_PROCESSING => &renderer.accent_soft_brush,
-            STATE_DONE => &renderer.accent_soft_brush,
-            _ => &renderer.track_glow_brush,
-        };
-        renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 10.0 * pulse, 10.0 * pulse),
-            outer_brush,
-        );
-
-        // Middle glow
-        renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 7.0 * pulse, 7.0 * pulse),
-            &renderer.accent_soft_brush,
-        );
-
-        // Core ring
-        renderer.render_target.DrawEllipse(
-            &ellipse(center.x, center.y, 5.0, 5.0),
-            &renderer.accent_brush,
-            1.0,
-            None,
-        );
-
-        // Inner fill
-        renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 4.0, 4.0),
-            &renderer.accent_brush,
-        );
-
-        // Bright center dot
-        renderer.render_target.FillEllipse(
-            &ellipse(center.x, center.y, 2.0, 2.0),
-            &renderer.title_brush,
-        );
-    }
-
-    unsafe fn draw_signal_line(renderer: &Renderer, state: u32, frame: u32, level: f32) {
-        // 坐标是 DIP，Direct2D 自动转换为物理像素
-        // 布局填满 180×40：状态灯在左，波形在中间偏右
-        const BARS: usize = 26;
-        let left = 38.0_f32; // 状态灯右侧开始，稍向右移
-        let right = 170.0_f32; // 窗口右边界
-        let width = right - left;
-        let baseline = 20.0_f32; // 垂直居中
-        let bar_width = 1.5_f32;
-        let gap = (width - BARS as f32 * bar_width) / (BARS as f32 - 1.0);
-        let time = frame as f32 * 0.15;
-        let max_bar_half = 8.0_f32; // 上下最大波动幅度
-
-        for i in 0..BARS {
-            let x = left + i as f32 * (bar_width + gap);
-            let p = i as f32 / BARS as f32;
-            let norm = match state {
-                STATE_RECORDING => {
-                    let env_main = gaussian(p, 0.30, 0.14) * 1.2;
-                    let env_tail = gaussian(p, 0.60, 0.20) * 0.50;
-                    let env_end = gaussian(p, 0.85, 0.09) * 0.18;
-                    let carrier = (time + p * 12.0).sin() * 0.5 + 0.5;
-                    let shaped = (carrier * 0.6 + 0.4).clamp(0.0, 1.0);
-                    ((env_main + env_tail + env_end) * shaped * level.powf(0.70)).clamp(0.0, 1.0)
-                }
-                STATE_PROCESSING => {
-                    let env = gaussian(p, 0.35, 0.22) * 0.65 + gaussian(p, 0.65, 0.16) * 0.40;
-                    let carrier = ((time * 1.2 + p * 8.0).sin() * 0.5 + 0.5) * 0.70 + 0.30;
-                    (env * carrier).clamp(0.0, 0.80)
-                }
-                STATE_DONE => {
-                    // Gentle fade-out shimmer — was nearly invisible at 0.45 norm ceiling
-                    let env = gaussian(p, 0.45, 0.25) * 0.80;
-                    let carrier = ((time * 0.8 + p * 5.5).sin() * 0.5 + 0.5) * 0.65 + 0.35;
-                    (env * carrier).clamp(0.0, 0.75)
-                }
-                _ => 0.0,
-            };
-
-            // 上下对称波动：以 baseline 为中心，上下各 half_height
-            let half_height = norm * max_bar_half;
-            let top = baseline - half_height;
-            let bottom = baseline + half_height;
-
-            // Soft glow halo behind bar (上下扩展)
-            let shadow_rect = D2D_RECT_F {
-                left: x - 0.5,
-                top: top - 1.0,
-                right: x + bar_width + 0.5,
-                bottom: bottom + 1.0,
-            };
-            renderer
-                .render_target
-                .FillRectangle(&shadow_rect, &renderer.accent_soft_brush);
-
-            // Main waveform bar — same accent color as status lens
-            let bar_rect = D2D_RECT_F {
-                left: x,
-                top,
-                right: x + bar_width,
-                bottom,
-            };
-            renderer
-                .render_target
-                .FillRectangle(&bar_rect, &renderer.accent_brush);
-        }
-    }
-
-    unsafe fn draw_timer(_renderer: &Renderer, _elapsed_ms: u32) {
-        // 不再显示计时器文字
-    }
-
-    fn gaussian(x: f32, mean: f32, sigma: f32) -> f32 {
-        let z = (x - mean) / sigma;
-        (-0.5 * z * z).exp()
-    }
-
-    fn current_elapsed_ms(state: u32) -> u32 {
-        if state == STATE_RECORDING {
-            if let Some(start) = *recording_start_cell().lock().unwrap() {
-                return Instant::now()
-                    .duration_since(start)
-                    .as_millis()
-                    .min(u32::MAX as u128) as u32;
-            }
-        }
-        G_ELAPSED_MS.load(Ordering::SeqCst)
-    }
-
-    fn load_baseplate_bitmap(render_target: &ID2D1RenderTarget) -> WinResult<ID2D1Bitmap> {
-        let dyn_img = image::load_from_memory_with_format(BASE_PLATE_TGA, ImageFormat::Tga)
-            .map_err(|e| {
-                windows::core::Error::new(
-                    windows::core::HRESULT(0x80004005u32 as i32),
-                    format!("failed to decode OSD baseplate: {e}"),
-                )
-            })?;
-        let rgba = dyn_img.to_rgba8();
-        let (width, height) = rgba.dimensions();
-        let mut bytes = rgba.into_raw();
-        for px in bytes.chunks_exact_mut(4) {
-            px.swap(0, 2);
-        }
-        tracing::info!(
-            "[OSD DPI] Baseplate raw: {}x{}, BASE: {}x{}",
-            width,
-            height,
-            BASE_WIN_W,
-            BASE_WIN_H
-        );
-
-        // bitmap dpi 设为 96，表示图片设计分辨率是 96 DPI
-        // Direct2D 会根据渲染目标 DPI 自动缩放
-        let props = D2D1_BITMAP_PROPERTIES {
-            pixelFormat: D2D1_PIXEL_FORMAT {
-                format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM,
-                alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
-            },
-            dpiX: 96.0,
-            dpiY: 96.0,
-        };
-
-        unsafe {
-            render_target.CreateBitmap(
-                D2D_SIZE_U { width, height },
-                Some(bytes.as_ptr() as _),
-                width * 4,
-                &props,
-            )
-        }
-    }
-
-    fn theme_for_state(state: u32) -> Theme {
-        match state {
-            STATE_RECORDING => Theme {
-                shell_outer: rgb(0.06, 0.08, 0.11, 1.0),
-                shell_inner: rgb(0.10, 0.12, 0.16, 1.0),
-                shell_core: rgb(0.13, 0.16, 0.20, 1.0),
-                lens_outer: rgb(0.19, 0.18, 0.20, 1.0),
-                glaze: rgb(1.0, 1.0, 1.0, 0.08),
-                reflection: rgb(0.90, 0.54, 0.42, 0.06),
-                border_outer: rgb(1.0, 1.0, 1.0, 0.18),
-                border_inner: rgb(0.92, 0.54, 0.44, 0.16),
-                title: rgb(0.96, 0.97, 0.98, 0.96),
-                subtitle: rgb(0.92, 0.94, 0.97, 0.70),
-                accent: rgb(0.96, 0.47, 0.35, 1.0),
-                accent_soft: rgb(0.96, 0.47, 0.35, 0.20),
-                track: rgb(0.17, 0.14, 0.15, 1.0),
-                track_glow: rgb(0.96, 0.47, 0.35, 0.14),
-                button_face: rgb(0.28, 0.32, 0.35, 0.96),
-                button_border: rgb(1.0, 1.0, 1.0, 0.14),
-                danger_face: rgb(0.46, 0.17, 0.18, 0.96),
-            },
-            STATE_PROCESSING => Theme {
-                shell_outer: rgb(0.06, 0.08, 0.11, 1.0),
-                shell_inner: rgb(0.10, 0.12, 0.16, 1.0),
-                shell_core: rgb(0.13, 0.16, 0.20, 1.0),
-                lens_outer: rgb(0.20, 0.19, 0.16, 1.0),
-                glaze: rgb(1.0, 1.0, 1.0, 0.08),
-                reflection: rgb(0.92, 0.78, 0.42, 0.06),
-                border_outer: rgb(1.0, 1.0, 1.0, 0.18),
-                border_inner: rgb(0.88, 0.76, 0.42, 0.16),
-                title: rgb(0.96, 0.97, 0.98, 0.96),
-                subtitle: rgb(0.92, 0.94, 0.97, 0.70),
-                accent: rgb(0.85, 0.72, 0.36, 1.0),
-                accent_soft: rgb(0.85, 0.72, 0.36, 0.20),
-                track: rgb(0.19, 0.17, 0.13, 1.0),
-                track_glow: rgb(0.85, 0.72, 0.36, 0.14),
-                button_face: rgb(0.30, 0.32, 0.31, 0.96),
-                button_border: rgb(1.0, 1.0, 1.0, 0.14),
-                danger_face: rgb(0.46, 0.20, 0.18, 0.96),
-            },
-            STATE_DONE => Theme {
-                shell_outer: rgb(0.06, 0.08, 0.11, 1.0),
-                shell_inner: rgb(0.10, 0.12, 0.16, 1.0),
-                shell_core: rgb(0.13, 0.16, 0.20, 1.0),
-                lens_outer: rgb(0.15, 0.20, 0.18, 1.0),
-                glaze: rgb(1.0, 1.0, 1.0, 0.08),
-                reflection: rgb(0.56, 0.86, 0.74, 0.06),
-                border_outer: rgb(1.0, 1.0, 1.0, 0.18),
-                border_inner: rgb(0.50, 0.84, 0.70, 0.16),
-                title: rgb(0.95, 0.97, 0.98, 0.96),
-                subtitle: rgb(0.90, 0.94, 0.95, 0.70),
-                accent: rgb(0.46, 0.84, 0.68, 1.0),
-                accent_soft: rgb(0.46, 0.84, 0.68, 0.18),
-                track: rgb(0.13, 0.18, 0.16, 1.0),
-                track_glow: rgb(0.46, 0.84, 0.68, 0.14),
-                button_face: rgb(0.25, 0.33, 0.30, 0.96),
-                button_border: rgb(1.0, 1.0, 1.0, 0.14),
-                danger_face: rgb(0.33, 0.18, 0.19, 0.96),
-            },
-            _ => Theme {
-                shell_outer: rgb(0.06, 0.08, 0.11, 1.0),
-                shell_inner: rgb(0.10, 0.12, 0.16, 1.0),
-                shell_core: rgb(0.13, 0.16, 0.20, 1.0),
-                lens_outer: rgb(0.16, 0.19, 0.23, 1.0),
-                glaze: rgb(1.0, 1.0, 1.0, 0.08),
-                reflection: rgb(0.64, 0.78, 0.96, 0.06),
-                border_outer: rgb(1.0, 1.0, 1.0, 0.18),
-                border_inner: rgb(0.66, 0.78, 0.94, 0.16),
-                title: rgb(0.96, 0.97, 0.98, 0.96),
-                subtitle: rgb(0.92, 0.94, 0.97, 0.70),
-                accent: rgb(0.62, 0.72, 0.90, 1.0),
-                accent_soft: rgb(0.62, 0.72, 0.90, 0.20),
-                track: rgb(0.14, 0.18, 0.22, 1.0),
-                track_glow: rgb(0.62, 0.72, 0.90, 0.14),
-                button_face: rgb(0.28, 0.31, 0.35, 0.96),
-                button_border: rgb(1.0, 1.0, 1.0, 0.14),
-                danger_face: rgb(0.40, 0.18, 0.20, 0.96),
-            },
-        }
-    }
-
-    fn rgb(r: f32, g: f32, b: f32, a: f32) -> D2D1_COLOR_F {
-        D2D1_COLOR_F { r, g, b, a }
-    }
-
-    fn ellipse(x: f32, y: f32, rx: f32, ry: f32) -> D2D1_ELLIPSE {
-        D2D1_ELLIPSE {
-            point: D2D_POINT_2F { x, y },
-            radiusX: rx,
-            radiusY: ry,
+//! The speech pipeline talks to [`OsdHandle`]. Rendering and native-window details stay
+//! on the desktop UI thread. Nothing is painted unless a dictation is in flight — the native
+//! surface is kept alive on Windows only because re-showing a window there steals focus from
+//! the app receiving the text.
+
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
+
+use eframe::egui::{
+    self, Align2, Color32, CornerRadius, FontId, Id, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2,
+    ViewportBuilder, ViewportCommand, ViewportId,
+};
+
+/// The native surface is a transparent canvas; the pill is drawn centred inside it so it can
+/// grow and shrink without resizing (and re-compositing) a window on every phase change.
+const CANVAS: Vec2 = Vec2::new(620.0, 112.0);
+/// Must match `ViewportBuilder::with_title` below: the color-key hookup finds the native
+/// overlay window by title.
+const OVERLAY_TITLE: &str = "auto-voice status";
+const PILL_HEIGHT: f32 = 62.0;
+const WAVE_SLOTS: usize = 44;
+
+/// Where the overlay waits between dictations on platforms that keep it mapped.
+const PARKED: Pos2 = Pos2::new(-20_000.0, -20_000.0);
+
+const FADE: f32 = 0.14;
+const FADE_OUT: Duration = Duration::from_millis(180);
+const DONE_VISIBLE_FOR: Duration = Duration::from_millis(1500);
+const NOTICE_VISIBLE_FOR: Duration = Duration::from_millis(2600);
+
+pub fn viewport_id() -> ViewportId {
+    ViewportId::from_hash_of("auto-voice-osd")
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OsdPhase {
+    Hidden,
+    /// Hotkey held, microphone open.
+    Listening,
+    /// Hotkey released, ASR + polish running.
+    Processing,
+    /// Text was inserted; the pill shows it for a moment.
+    Done,
+    /// Nothing usable to insert, or something went wrong.
+    Notice,
+}
+
+#[derive(Clone, Debug)]
+pub struct OsdSnapshot {
+    pub phase: OsdPhase,
+    pub level: f32,
+    pub elapsed: Duration,
+    pub changed_at: Instant,
+    pub text: String,
+    pub warn: bool,
+    pub hotkey: String,
+    pub levels: Vec<f32>,
+}
+
+struct OsdState {
+    phase: OsdPhase,
+    level: f32,
+    levels: VecDeque<f32>,
+    last_level_at: Instant,
+    recording_started: Option<Instant>,
+    elapsed: Duration,
+    changed_at: Instant,
+    hidden_at: Instant,
+    text: String,
+    warn: bool,
+    hotkey: String,
+    follow_caret: bool,
+    context: Option<egui::Context>,
+}
+
+impl Default for OsdState {
+    fn default() -> Self {
+        Self {
+            phase: OsdPhase::Hidden,
+            level: 0.0,
+            levels: VecDeque::from(vec![0.0; WAVE_SLOTS]),
+            last_level_at: Instant::now(),
+            recording_started: None,
+            elapsed: Duration::ZERO,
+            changed_at: Instant::now(),
+            hidden_at: Instant::now() - FADE_OUT,
+            text: String::new(),
+            warn: false,
+            hotkey: "Caps Lock".to_owned(),
+            follow_caret: true,
+            context: None,
         }
     }
 }
 
-#[cfg(not(windows))]
-mod stub_impl {
-    #[derive(Clone)]
-    pub struct OsdHandle;
+#[derive(Clone, Default)]
+pub struct OsdHandle {
+    state: Arc<Mutex<OsdState>>,
+}
 
-    impl OsdHandle {
-        pub fn set_recording(&self) {}
-        pub fn set_processing(&self) {}
-        pub fn set_done(&self) {}
-        pub fn hide(&self) {}
-        pub fn set_level(&self, _level: f32) {}
+impl OsdHandle {
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub fn spawn_osd() -> OsdHandle {
-        OsdHandle
+    pub fn attach_context(&self, context: &egui::Context) {
+        let mut state = self.lock_state();
+        state.context = Some(context.clone());
+        let visible = surface_visible(&state);
+        drop(state);
+        context.send_viewport_cmd_to(viewport_id(), ViewportCommand::Visible(visible));
+        context.request_repaint_of(viewport_id());
+    }
+
+    /// Label shown under the title while listening, e.g. `"Caps Lock"`.
+    pub fn set_hotkey_label(&self, label: impl Into<String>) {
+        self.lock_state().hotkey = label.into();
+    }
+
+    pub fn set_follow_caret(&self, follow: bool) {
+        self.lock_state().follow_caret = follow;
+    }
+
+    pub fn set_recording(&self) {
+        let now = Instant::now();
+        // Read the focused window before we pop, so the anchor is the app being dictated into.
+        let follow = self.lock_state().follow_caret;
+        let anchor = crate::platform::overlay_origin(CANVAS, follow);
+        self.update(|state| {
+            state.phase = OsdPhase::Listening;
+            state.level = 0.0;
+            state.levels.iter_mut().for_each(|slot| *slot = 0.0);
+            state.recording_started = Some(now);
+            state.elapsed = Duration::ZERO;
+            state.changed_at = now;
+            state.text.clear();
+            state.warn = false;
+        });
+        self.move_to(anchor);
+    }
+
+    pub fn set_processing(&self) {
+        let now = Instant::now();
+        self.update(|state| {
+            if let Some(started) = state.recording_started.take() {
+                state.elapsed = now.saturating_duration_since(started);
+            }
+            state.phase = OsdPhase::Processing;
+            state.level = 0.0;
+            state.changed_at = now;
+        });
+    }
+
+    /// Text made it into the focused app.
+    pub fn set_done(&self, text: &str) {
+        let now = Instant::now();
+        let text = text.trim().to_owned();
+        self.update(|state| {
+            if let Some(started) = state.recording_started.take() {
+                state.elapsed = now.saturating_duration_since(started);
+            }
+            state.phase = OsdPhase::Done;
+            state.level = 0.0;
+            state.changed_at = now;
+            state.text = text;
+            state.warn = false;
+        });
+    }
+
+    /// Nothing was inserted. `warn` separates real failures from "didn't catch that".
+    pub fn set_notice(&self, message: impl Into<String>, warn: bool) {
+        let now = Instant::now();
+        let message = message.into();
+        self.update(|state| {
+            state.recording_started = None;
+            state.phase = OsdPhase::Notice;
+            state.level = 0.0;
+            state.changed_at = now;
+            state.text = message;
+            state.warn = warn;
+        });
+    }
+
+    pub fn hide(&self) {
+        self.update(|state| {
+            state.phase = OsdPhase::Hidden;
+            state.level = 0.0;
+            state.recording_started = None;
+            state.elapsed = Duration::ZERO;
+            state.changed_at = Instant::now();
+            state.hidden_at = Instant::now();
+            state.text.clear();
+        });
+    }
+
+    /// New recordings are blocked until the previous one finished showing its result.
+    pub fn can_recording_start(&self) -> bool {
+        self.lock_state().phase == OsdPhase::Hidden
+    }
+
+    pub fn set_level(&self, level: f32) {
+        let mut state = self.lock_state();
+        if state.phase != OsdPhase::Listening {
+            return;
+        }
+        let level = level.clamp(0.0, 1.0);
+        state.level = level;
+        // One waveform slot per frame's worth of audio keeps the scroll speed readable
+        // regardless of the capture buffer size.
+        if state.last_level_at.elapsed() >= Duration::from_millis(32) {
+            state.last_level_at = Instant::now();
+            state.levels.pop_front();
+            state.levels.push_back(level);
+        } else if let Some(last) = state.levels.back_mut() {
+            *last = last.max(level);
+        }
+        if let Some(context) = &state.context {
+            context.request_repaint_of(viewport_id());
+        }
+    }
+
+    pub fn snapshot(&self) -> OsdSnapshot {
+        let state = self.lock_state();
+        let elapsed = state
+            .recording_started
+            .map_or(state.elapsed, |started| started.elapsed());
+        OsdSnapshot {
+            phase: state.phase,
+            level: state.level,
+            elapsed,
+            changed_at: state.changed_at,
+            text: state.text.clone(),
+            warn: state.warn,
+            hotkey: state.hotkey.clone(),
+            levels: state.levels.iter().copied().collect(),
+        }
+    }
+
+    pub fn native_surface_visible(&self) -> bool {
+        surface_visible(&self.lock_state())
+    }
+
+    /// Retire a result pill once it has been on screen long enough.
+    pub fn tick(&self) {
+        let snapshot = self.snapshot();
+        let linger = match snapshot.phase {
+            OsdPhase::Done => visible_for(&snapshot.text),
+            OsdPhase::Notice => NOTICE_VISIBLE_FOR,
+            _ => return,
+        };
+        if snapshot.changed_at.elapsed() >= linger {
+            self.hide();
+        }
+    }
+
+    fn move_to(&self, anchor: Option<Pos2>) {
+        let Some(anchor) = anchor else { return };
+        let Some(context) = self.lock_state().context.clone() else {
+            return;
+        };
+        let points = context.pixels_per_point().max(0.1);
+        context.send_viewport_cmd_to(
+            viewport_id(),
+            ViewportCommand::OuterPosition(Pos2::new(anchor.x / points, anchor.y / points)),
+        );
+    }
+
+    fn update(&self, mutate: impl FnOnce(&mut OsdState)) {
+        let mut state = self.lock_state();
+        mutate(&mut state);
+        let context = state.context.clone();
+        let visible = surface_visible(&state);
+        drop(state);
+
+        if let Some(context) = context {
+            // Only ever shown from here. Hiding waits for the fade-out to finish in `draw`.
+            if visible {
+                context.send_viewport_cmd_to(viewport_id(), ViewportCommand::Visible(true));
+            }
+            context.request_repaint_of(viewport_id());
+        }
+    }
+
+    fn lock_state(&self) -> MutexGuard<'_, OsdState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+/// Longer results deserve a longer look, but never long enough to feel in the way.
+fn visible_for(text: &str) -> Duration {
+    let extra = (text.chars().count() as u64).min(60) * 26;
+    DONE_VISIBLE_FOR + Duration::from_millis(extra)
+}
+
+fn surface_visible(state: &OsdState) -> bool {
+    // Winit uses SW_SHOWNOACTIVATE only for the first show on Windows and SW_SHOW for later
+    // visibility cycles. Keeping a transparent, click-through surface alive prevents the OSD
+    // from stealing focus from the application receiving dictated text.
+    cfg!(target_os = "windows")
+        || state.phase != OsdPhase::Hidden
+        || state.hidden_at.elapsed() < FADE_OUT
+}
+
+pub fn viewport_builder(monitor_size: Option<Vec2>, visible: bool) -> ViewportBuilder {
+    let mut builder = ViewportBuilder::default()
+        .with_title(OVERLAY_TITLE)
+        .with_inner_size(CANVAS)
+        .with_min_inner_size(CANVAS)
+        .with_max_inner_size(CANVAS)
+        .with_resizable(false)
+        .with_decorations(false)
+        .with_transparent(true)
+        .with_always_on_top()
+        .with_mouse_passthrough(true)
+        .with_taskbar(false)
+        .with_active(false)
+        .with_visible(visible);
+
+    if let Some(monitor) = monitor_size {
+        builder = builder.with_position(crate::platform::overlay_fallback_origin(CANVAS, monitor));
+    }
+    builder
+}
+
+// ── Painting ─────────────────────────────────────────────────────────────────
+
+pub fn draw(ui: &mut egui::Ui, handle: &OsdHandle) {
+    punch_out_background_once();
+    handle.tick();
+    let snapshot = handle.snapshot();
+    let open = snapshot.phase != OsdPhase::Hidden;
+
+    // One eased value drives fade, lift and scale, so opening and closing mirror each other.
+    let progress = ui
+        .ctx()
+        .animate_bool_with_time(Id::new("auto-voice-osd-open"), open, FADE);
+    if progress <= 0.002 {
+        if !open {
+            // Windows keeps the surface mapped (re-showing it would steal focus from the app
+            // being dictated into), so park it off-screen instead: even if the compositor or
+            // the GL config refuses alpha, there is nothing left to see.
+            let command = if cfg!(target_os = "windows") {
+                ViewportCommand::OuterPosition(PARKED)
+            } else {
+                ViewportCommand::Visible(false)
+            };
+            ui.ctx().send_viewport_cmd_to(viewport_id(), command);
+        }
+        return;
+    }
+
+    let palette = Palette::for_snapshot(&snapshot);
+    let width = pill_width(ui, &snapshot);
+    let canvas = ui.max_rect();
+    let scale = 0.96 + 0.04 * progress;
+    let pill = Rect::from_center_size(
+        canvas.center() + Vec2::new(0.0, (1.0 - progress) * 10.0),
+        Vec2::new(width, PILL_HEIGHT) * scale,
+    );
+    let painter = ui.painter();
+    let alpha = |color: Color32| color.gamma_multiply(progress);
+
+    painter.rect_filled(
+        pill.translate(Vec2::new(0.0, 6.0)).expand(2.0),
+        CornerRadius::same(24),
+        alpha(Color32::from_black_alpha(60)),
+    );
+    painter.rect_filled(pill, CornerRadius::same(22), alpha(palette.surface));
+    painter.rect_stroke(
+        pill,
+        CornerRadius::same(22),
+        Stroke::new(1.0, alpha(palette.border)),
+        StrokeKind::Inside,
+    );
+
+    let orb = Pos2::new(pill.left() + 34.0, pill.center().y);
+    draw_orb(painter, orb, &snapshot, palette.accent, progress);
+
+    let text_left = pill.left() + 62.0;
+    match snapshot.phase {
+        OsdPhase::Listening => {
+            let tail = pill.right() - 16.0;
+            let timer = format!("{:.1}s", snapshot.elapsed.as_secs_f32());
+            let timer_width = 42.0;
+            painter.text(
+                Pos2::new(tail, pill.center().y),
+                Align2::RIGHT_CENTER,
+                timer,
+                FontId::proportional(13.0),
+                alpha(palette.muted),
+            );
+            draw_waveform(
+                painter,
+                Rect::from_min_max(
+                    Pos2::new(pill.right() - 150.0 - timer_width, pill.top() + 14.0),
+                    Pos2::new(tail - timer_width - 8.0, pill.bottom() - 14.0),
+                ),
+                &snapshot.levels,
+                alpha(palette.accent),
+            );
+            two_line(
+                painter,
+                text_left,
+                pill,
+                "正在聆听",
+                &format!("松开 {} 插入文字", snapshot.hotkey),
+                &palette,
+                progress,
+            );
+        }
+        OsdPhase::Processing => {
+            two_line(
+                painter,
+                text_left,
+                pill,
+                "正在转写",
+                &format!("本地识别中 · {:.1}s 语音", snapshot.elapsed.as_secs_f32()),
+                &palette,
+                progress,
+            );
+            draw_progress_track(
+                painter,
+                Rect::from_min_max(
+                    Pos2::new(pill.right() - 96.0, pill.center().y - 2.5),
+                    Pos2::new(pill.right() - 20.0, pill.center().y + 2.5),
+                ),
+                snapshot.changed_at.elapsed(),
+                alpha(palette.accent),
+            );
+        }
+        OsdPhase::Done | OsdPhase::Notice => {
+            let (title, body) = if snapshot.phase == OsdPhase::Done {
+                ("已插入", snapshot.text.as_str())
+            } else {
+                ("未插入", snapshot.text.as_str())
+            };
+            let galley = result_galley(ui, body, pill.right() - text_left - 18.0, palette.text);
+            let painter = ui.painter();
+            painter.text(
+                Pos2::new(text_left, pill.top() + 13.0),
+                Align2::LEFT_TOP,
+                title,
+                FontId::proportional(11.5),
+                alpha(palette.muted),
+            );
+            painter.galley(
+                Pos2::new(text_left, pill.top() + 29.0),
+                galley,
+                alpha(palette.text),
+            );
+        }
+        OsdPhase::Hidden => {}
+    }
+
+    match snapshot.phase {
+        OsdPhase::Listening | OsdPhase::Processing => {
+            ui.ctx()
+                .request_repaint_after_for(Duration::from_millis(33), viewport_id());
+        }
+        OsdPhase::Done | OsdPhase::Notice => {
+            let linger = if snapshot.phase == OsdPhase::Done {
+                visible_for(&snapshot.text)
+            } else {
+                NOTICE_VISIBLE_FOR
+            };
+            ui.ctx().request_repaint_after_for(
+                linger.saturating_sub(snapshot.changed_at.elapsed()),
+                viewport_id(),
+            );
+        }
+        // Keep repainting through the fade-out so the surface can be released afterwards.
+        OsdPhase::Hidden => ui
+            .ctx()
+            .request_repaint_after_for(Duration::from_millis(33), viewport_id()),
+    }
+}
+
+/// The native window only exists once the viewport has been created, so the color key is
+/// applied from the first paint rather than at startup.
+fn punch_out_background_once() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static DONE: AtomicBool = AtomicBool::new(false);
+    if DONE.load(Ordering::Relaxed) {
+        return;
+    }
+    if crate::platform::punch_out_overlay_background(OVERLAY_TITLE) {
+        DONE.store(true, Ordering::Relaxed);
+    }
+}
+
+fn pill_width(ui: &egui::Ui, snapshot: &OsdSnapshot) -> f32 {
+    match snapshot.phase {
+        OsdPhase::Listening => 344.0,
+        OsdPhase::Processing => 316.0,
+        _ => {
+            let measured = ui
+                .painter()
+                .layout_no_wrap(
+                    snapshot.text.clone(),
+                    FontId::proportional(14.5),
+                    Color32::WHITE,
+                )
+                .size()
+                .x;
+            (measured + 92.0).clamp(240.0, CANVAS.x - 40.0)
+        }
+    }
+}
+
+fn result_galley(
+    ui: &egui::Ui,
+    text: &str,
+    max_width: f32,
+    color: Color32,
+) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::simple_singleline(
+        text.to_owned(),
+        FontId::proportional(14.5),
+        color,
+    );
+    job.wrap = egui::text::TextWrapping::truncate_at_width(max_width);
+    ui.painter().layout_job(job)
+}
+
+fn two_line(
+    painter: &egui::Painter,
+    left: f32,
+    pill: Rect,
+    title: &str,
+    subtitle: &str,
+    palette: &Palette,
+    progress: f32,
+) {
+    painter.text(
+        Pos2::new(left, pill.top() + 12.0),
+        Align2::LEFT_TOP,
+        title,
+        FontId::proportional(15.5),
+        palette.text.gamma_multiply(progress),
+    );
+    painter.text(
+        Pos2::new(left, pill.top() + 34.0),
+        Align2::LEFT_TOP,
+        subtitle,
+        FontId::proportional(11.5),
+        palette.muted.gamma_multiply(progress),
+    );
+}
+
+/// The status orb: a breathing ring while listening, an orbiting arc while transcribing,
+/// a tick or an exclamation once it is over.
+fn draw_orb(
+    painter: &egui::Painter,
+    center: Pos2,
+    snapshot: &OsdSnapshot,
+    accent: Color32,
+    progress: f32,
+) {
+    let accent = accent.gamma_multiply(progress);
+    match snapshot.phase {
+        OsdPhase::Listening => {
+            let pulse = 15.0 + snapshot.level * 7.0;
+            painter.circle_filled(center, pulse, accent.gamma_multiply(0.16));
+            painter.circle_filled(center, 6.0 + snapshot.level * 2.5, accent);
+        }
+        OsdPhase::Processing => {
+            painter.circle_filled(center, 15.0, accent.gamma_multiply(0.16));
+            draw_arc(
+                painter,
+                center,
+                11.0,
+                snapshot.changed_at.elapsed().as_secs_f32() * 4.2,
+                accent,
+            );
+        }
+        OsdPhase::Done => {
+            painter.circle_filled(center, 15.0, accent.gamma_multiply(0.18));
+            let stroke = Stroke::new(2.4, accent);
+            painter.line_segment(
+                [center + Vec2::new(-6.0, 0.0), center + Vec2::new(-1.5, 4.6)],
+                stroke,
+            );
+            painter.line_segment(
+                [center + Vec2::new(-1.5, 4.6), center + Vec2::new(6.6, -4.8)],
+                stroke,
+            );
+        }
+        OsdPhase::Notice => {
+            painter.circle_filled(center, 15.0, accent.gamma_multiply(0.18));
+            painter.line_segment(
+                [center + Vec2::new(0.0, -6.0), center + Vec2::new(0.0, 2.0)],
+                Stroke::new(2.4, accent),
+            );
+            painter.circle_filled(center + Vec2::new(0.0, 6.0), 1.5, accent);
+        }
+        OsdPhase::Hidden => {}
+    }
+}
+
+fn draw_arc(painter: &egui::Painter, center: Pos2, radius: f32, phase: f32, color: Color32) {
+    let points: Vec<Pos2> = (0..=18)
+        .map(|step| {
+            let angle = phase + step as f32 * (std::f32::consts::TAU * 0.42 / 18.0);
+            center + Vec2::angled(angle) * radius
+        })
+        .collect();
+    painter.add(Shape::line(points, Stroke::new(2.4, color)));
+}
+
+/// Scrolling history of the microphone level: what was actually heard, not a canned animation.
+fn draw_waveform(painter: &egui::Painter, rect: Rect, levels: &[f32], color: Color32) {
+    if rect.width() <= 0.0 || levels.is_empty() {
+        return;
+    }
+    let step = rect.width() / levels.len() as f32;
+    let center_y = rect.center().y;
+    for (index, level) in levels.iter().enumerate() {
+        let x = rect.left() + step * (index as f32 + 0.5);
+        // Newer samples on the right are drawn brighter, so the bar reads as moving.
+        let recency = 0.35 + 0.65 * (index as f32 / levels.len() as f32);
+        let height = (3.0 + level.sqrt() * rect.height() * 0.9).min(rect.height());
+        painter.rect_filled(
+            Rect::from_center_size(Pos2::new(x, center_y), Vec2::new(2.6, height)),
+            CornerRadius::same(2),
+            color.gamma_multiply(recency),
+        );
+    }
+}
+
+fn draw_progress_track(painter: &egui::Painter, track: Rect, elapsed: Duration, color: Color32) {
+    painter.rect_filled(track, CornerRadius::same(3), color.gamma_multiply(0.18));
+    // Indeterminate: a shuttle sweeping the track, since ASR gives us no progress to report.
+    let cycle = (elapsed.as_secs_f32() * 0.9).fract();
+    let eased = 0.5 - 0.5 * (cycle * std::f32::consts::TAU).cos();
+    let width = track.width() * 0.42;
+    let left = track.left() + (track.width() - width) * eased;
+    painter.rect_filled(
+        Rect::from_min_size(
+            Pos2::new(left, track.top()),
+            Vec2::new(width, track.height()),
+        ),
+        CornerRadius::same(3),
+        color,
+    );
+}
+
+struct Palette {
+    surface: Color32,
+    border: Color32,
+    accent: Color32,
+    text: Color32,
+    muted: Color32,
+}
+
+impl Palette {
+    fn for_snapshot(snapshot: &OsdSnapshot) -> Self {
+        let accent = match snapshot.phase {
+            OsdPhase::Hidden => Color32::from_rgb(112, 126, 151),
+            OsdPhase::Listening => Color32::from_rgb(255, 92, 116),
+            OsdPhase::Processing => Color32::from_rgb(104, 156, 255),
+            OsdPhase::Done => Color32::from_rgb(67, 211, 151),
+            OsdPhase::Notice if snapshot.warn => Color32::from_rgb(255, 122, 122),
+            OsdPhase::Notice => Color32::from_rgb(235, 176, 91),
+        };
+        Self {
+            surface: Color32::from_rgba_premultiplied(19, 24, 34, 246),
+            border: accent.gamma_multiply(0.42),
+            accent,
+            text: Color32::from_rgb(245, 247, 250),
+            muted: Color32::from_rgb(151, 162, 180),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recording_lifecycle_blocks_reentry_until_hidden() {
+        let handle = OsdHandle::new();
+        assert!(handle.can_recording_start());
+        handle.set_recording();
+        assert!(!handle.can_recording_start());
+        handle.set_processing();
+        handle.set_done("你好");
+        assert!(!handle.can_recording_start());
+        handle.hide();
+        assert!(handle.can_recording_start());
+    }
+
+    #[test]
+    fn audio_level_is_clamped_and_recorded_in_the_waveform() {
+        let handle = OsdHandle::new();
+        handle.set_recording();
+        handle.set_level(2.0);
+        let snapshot = handle.snapshot();
+        assert_eq!(snapshot.level, 1.0);
+        assert_eq!(snapshot.levels.len(), WAVE_SLOTS);
+        assert_eq!(snapshot.levels.last().copied(), Some(1.0));
+    }
+
+    #[test]
+    fn a_result_carries_the_inserted_text() {
+        let handle = OsdHandle::new();
+        handle.set_recording();
+        handle.set_processing();
+        handle.set_done("  今天天气不错  ");
+        let snapshot = handle.snapshot();
+        assert_eq!(snapshot.phase, OsdPhase::Done);
+        assert_eq!(snapshot.text, "今天天气不错");
+    }
+
+    #[test]
+    fn longer_results_stay_on_screen_longer() {
+        assert!(visible_for("好") < visible_for(&"好".repeat(30)));
     }
 }

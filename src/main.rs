@@ -3,9 +3,13 @@ mod audio;
 mod config;
 mod diarization;
 mod llm;
+mod lmstudio;
 mod osd;
 mod output;
+mod platform;
+mod runtime;
 mod tray;
+mod ui;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -138,10 +142,13 @@ enum Commands {
 
 // ── Resolved config (CLI > config.toml > hardcoded defaults) ────────────────
 
-struct AppConfig {
+pub(crate) struct AppConfig {
     lm_url: String,
     lm_model: String,
     no_llm: bool,
+    lmstudio_auto_start: bool,
+    lmstudio_model: String,
+    lmstudio_context_length: Option<u32>,
     asr_backend: String,
     // SenseVoice
     model: String,
@@ -167,53 +174,53 @@ struct AppConfig {
 }
 
 impl AppConfig {
-    fn resolve(cli: &Cli, file: &config::ConfigFile) -> Self {
+    /// Resolve config-file values against the built-in defaults. This is also the path the
+    /// settings UI takes when applying a save at runtime, so it must not depend on the CLI.
+    pub(crate) fn from_file(file: &config::ConfigFile) -> Self {
+        let lm_model = file
+            .lm_model
+            .clone()
+            .unwrap_or_else(|| "local-model".to_string());
         Self {
-            lm_url: cli
+            lm_url: file
                 .lm_url
                 .clone()
-                .or_else(|| file.lm_url.clone())
                 .unwrap_or_else(|| DEFAULT_LM_URL.to_string()),
-            lm_model: cli
-                .lm_model
+            lm_model: lm_model.clone(),
+            no_llm: file.no_llm.unwrap_or(false),
+            lmstudio_auto_start: file.lmstudio_auto_start.unwrap_or(false),
+            lmstudio_model: file
+                .lmstudio_model
                 .clone()
-                .or_else(|| file.lm_model.clone())
-                .unwrap_or_else(|| "local-model".to_string()),
-            no_llm: cli.no_llm || file.no_llm.unwrap_or(false),
-            asr_backend: cli
+                .unwrap_or_else(|| lm_model.clone()),
+            lmstudio_context_length: file.lmstudio_context_length,
+            asr_backend: file
                 .asr_backend
                 .clone()
-                .or_else(|| file.asr_backend.clone())
                 .unwrap_or_else(|| "sense-voice".to_string()),
-            model: cli
+            model: file
                 .model
                 .clone()
-                .or_else(|| file.model.clone())
                 .unwrap_or_else(|| DEFAULT_MODEL.to_string()),
-            tokens: cli
+            tokens: file
                 .tokens
                 .clone()
-                .or_else(|| file.tokens.clone())
                 .unwrap_or_else(|| DEFAULT_TOKENS.to_string()),
-            funasr_encoder_adaptor: cli
+            funasr_encoder_adaptor: file
                 .funasr_encoder_adaptor
                 .clone()
-                .or_else(|| file.funasr_encoder_adaptor.clone())
                 .unwrap_or_else(|| DEFAULT_FUNASR_ENCODER_ADAPTOR.to_string()),
-            funasr_llm: cli
+            funasr_llm: file
                 .funasr_llm
                 .clone()
-                .or_else(|| file.funasr_llm.clone())
                 .unwrap_or_else(|| DEFAULT_FUNASR_LLM.to_string()),
-            funasr_embedding: cli
+            funasr_embedding: file
                 .funasr_embedding
                 .clone()
-                .or_else(|| file.funasr_embedding.clone())
                 .unwrap_or_else(|| DEFAULT_FUNASR_EMBEDDING.to_string()),
-            funasr_tokenizer: cli
+            funasr_tokenizer: file
                 .funasr_tokenizer
                 .clone()
-                .or_else(|| file.funasr_tokenizer.clone())
                 .unwrap_or_else(|| DEFAULT_FUNASR_TOKENIZER.to_string()),
             funasr_itn: file.funasr_itn.unwrap_or(true),
             speaker_segmentation_model: file
@@ -228,10 +235,9 @@ impl AppConfig {
             speaker_threshold: file.speaker_threshold.unwrap_or(0.5),
             speaker_min_duration_on: file.speaker_min_duration_on.unwrap_or(0.2),
             speaker_min_duration_off: file.speaker_min_duration_off.unwrap_or(0.5),
-            lang: cli
+            lang: file
                 .lang
                 .clone()
-                .or_else(|| file.lang.clone())
                 .unwrap_or_else(|| DEFAULT_LANG.to_string()),
             energy_threshold: file.energy_threshold.unwrap_or(0.01),
             vad_silence_ms: file.vad_silence_ms.unwrap_or(800),
@@ -241,14 +247,55 @@ impl AppConfig {
         }
     }
 
-    fn build_hr_config(&self) -> asr::HrConfig {
+    fn resolve(cli: &Cli, file: &config::ConfigFile) -> Self {
+        let mut app = Self::from_file(file);
+        let lmstudio_follows_lm_model = file.lmstudio_model.is_none();
+
+        if let Some(value) = cli.lm_url.clone() {
+            app.lm_url = value;
+        }
+        if let Some(value) = cli.lm_model.clone() {
+            if lmstudio_follows_lm_model {
+                app.lmstudio_model = value.clone();
+            }
+            app.lm_model = value;
+        }
+        app.no_llm |= cli.no_llm;
+        if let Some(value) = cli.asr_backend.clone() {
+            app.asr_backend = value;
+        }
+        if let Some(value) = cli.model.clone() {
+            app.model = value;
+        }
+        if let Some(value) = cli.tokens.clone() {
+            app.tokens = value;
+        }
+        if let Some(value) = cli.funasr_encoder_adaptor.clone() {
+            app.funasr_encoder_adaptor = value;
+        }
+        if let Some(value) = cli.funasr_llm.clone() {
+            app.funasr_llm = value;
+        }
+        if let Some(value) = cli.funasr_embedding.clone() {
+            app.funasr_embedding = value;
+        }
+        if let Some(value) = cli.funasr_tokenizer.clone() {
+            app.funasr_tokenizer = value;
+        }
+        if let Some(value) = cli.lang.clone() {
+            app.lang = value;
+        }
+        app
+    }
+
+    pub(crate) fn build_hr_config(&self) -> asr::HrConfig {
         asr::HrConfig {
             lexicon: self.hr_lexicon.clone(),
             rule_fsts: self.hr_rule_fsts.clone(),
         }
     }
 
-    fn build_asr_config(&self) -> asr::AsrConfig {
+    pub(crate) fn build_asr_config(&self) -> asr::AsrConfig {
         match self.asr_backend.as_str() {
             "funasr-nano" => asr::AsrConfig::FunAsrNano {
                 encoder_adaptor: self.funasr_encoder_adaptor.clone(),
@@ -265,6 +312,37 @@ impl AppConfig {
             },
         }
     }
+
+    /// The hot-reloadable view of this config, shared with the push-to-talk worker.
+    fn build_runtime(&self, file: &config::ConfigFile) -> runtime::Runtime {
+        runtime::Runtime::new(
+            runtime::LiveTunables {
+                ptt_key: self
+                    .ptt_key
+                    .clone()
+                    .unwrap_or_else(|| "CapsLock".to_string()),
+                energy_threshold: self.energy_threshold,
+                no_llm: self.no_llm,
+                lm_url: self.lm_url.clone(),
+                lm_model: self.lm_model.clone(),
+                follow_caret: file.overlay_follow_caret.unwrap_or(true),
+            },
+            self.build_asr_config(),
+            self.build_hr_config(),
+        )
+    }
+
+    fn build_lmstudio_config(&self) -> Option<lmstudio::AutoStartConfig> {
+        if self.no_llm || !self.lmstudio_auto_start {
+            return None;
+        }
+        Some(lmstudio::AutoStartConfig {
+            base_url: self.lm_url.clone(),
+            api_model: self.lm_model.clone(),
+            local_model: self.lmstudio_model.clone(),
+            context_length: self.lmstudio_context_length,
+        })
+    }
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────
@@ -272,10 +350,9 @@ impl AppConfig {
 #[tokio::main]
 async fn main() -> Result<()> {
     // 日志文件路径
-    let log_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let log_dir = platform::app_log_dir();
+    std::fs::create_dir_all(&log_dir)
+        .with_context(|| format!("Failed to create log directory {}", log_dir.display()))?;
     let log_file = log_dir.join("auto-voice.log");
 
     let file_appender = tracing_appender::rolling::daily(log_dir, "auto-voice.log");
@@ -307,21 +384,10 @@ async fn main() -> Result<()> {
     match cli.command {
         // ── 无参数双击启动 → 系统托盘 PTT 模式 ─────────────────────────────
         None => {
-            let live_cfg = audio::mic::LiveConfig {
-                vad_silence_ms: app.vad_silence_ms,
-                energy_threshold: app.energy_threshold,
-                output_path: None,
-                lm_url: app.lm_url.clone(),
-                lm_model: app.lm_model.clone(),
-                no_llm: app.no_llm,
-                ptt_key: app.ptt_key.clone(),
-                osd: None, // tray.rs 会注入 OsdHandle
-            };
             tray::run_tray(tray::TrayConfig {
-                live_cfg,
-                asr_config: app.build_asr_config(),
-                hr_config: app.build_hr_config(),
-                ptt_key: app.ptt_key.clone(),
+                runtime: app.build_runtime(&file_cfg),
+                lmstudio: app.build_lmstudio_config(),
+                settings: file_cfg,
             })?;
         }
 
@@ -334,6 +400,7 @@ async fn main() -> Result<()> {
             speaker_min_duration_on,
             speaker_min_duration_off,
         }) => {
+            ensure_lmstudio_ready(&app);
             cmd_transcribe(
                 &app,
                 input,
@@ -352,24 +419,26 @@ async fn main() -> Result<()> {
             energy_threshold,
             ptt,
         }) => {
-            tracing::info!("Loading {} model...", app.asr_backend);
-            let engine = asr::AsrEngine::new(&app.build_asr_config(), Some(&app.build_hr_config()))
-                .context("Failed to load ASR model")?;
-
-            let live_cfg = audio::mic::LiveConfig {
-                vad_silence_ms: vad_silence_ms.unwrap_or(app.vad_silence_ms),
-                energy_threshold: energy_threshold.unwrap_or(app.energy_threshold),
-                output_path: output,
-                lm_url: app.lm_url.clone(),
-                lm_model: app.lm_model.clone(),
-                no_llm: app.no_llm,
-                ptt_key: app.ptt_key.clone(),
-                osd: None,
-            };
+            ensure_lmstudio_ready(&app);
 
             if ptt {
-                tokio::task::block_in_place(|| audio::ptt::run_ptt(&live_cfg, &engine))?;
+                // run_ptt 自己加载模型，这样 CLI 与托盘走同一条热重载路径。
+                let runtime = app.build_runtime(&file_cfg);
+                tokio::task::block_in_place(|| audio::ptt::run_ptt(&runtime, None))?;
             } else {
+                tracing::info!("Loading {} model...", app.asr_backend);
+                let engine =
+                    asr::AsrEngine::new(&app.build_asr_config(), Some(&app.build_hr_config()))
+                        .context("Failed to load ASR model")?;
+
+                let live_cfg = audio::mic::LiveConfig {
+                    vad_silence_ms: vad_silence_ms.unwrap_or(app.vad_silence_ms),
+                    energy_threshold: energy_threshold.unwrap_or(app.energy_threshold),
+                    output_path: output,
+                    lm_url: app.lm_url.clone(),
+                    lm_model: app.lm_model.clone(),
+                    no_llm: app.no_llm,
+                };
                 tokio::task::block_in_place(|| audio::mic::run_live(&live_cfg, &engine))?;
             }
         }
@@ -393,11 +462,32 @@ async fn main() -> Result<()> {
             }
             println!("  lm_url:   {}", app.lm_url);
             println!("  lm_model: {}", app.lm_model);
+            println!("  no_llm:   {}", app.no_llm);
+            println!("  lmstudio_auto_start: {}", app.lmstudio_auto_start);
+            println!("  lmstudio_model:      {}", app.lmstudio_model);
+            println!(
+                "  lmstudio_context_length: {}",
+                app.lmstudio_context_length
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| "default".to_string())
+            );
             println!("  lang:   {}", app.lang);
         }
     }
 
     Ok(())
+}
+
+fn ensure_lmstudio_ready(app: &AppConfig) {
+    let Some(cfg) = app.build_lmstudio_config() else {
+        return;
+    };
+    if let Err(error) = lmstudio::ensure_ready(&cfg) {
+        tracing::warn!(
+            "LM Studio auto-start failed; LLM calls will fall back to raw text: {error:#}"
+        );
+        eprintln!("Warning: LM Studio auto-start failed: {error:#}");
+    }
 }
 
 #[cfg(windows)]
