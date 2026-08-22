@@ -84,6 +84,15 @@ enigo = "0.2"
 # 系统托盘
 tray-icon = "0.17"
 
+# sherpa-onnx is the cross-platform ASR runtime. Keep it in the common
+# dependency set; placing it below a target table makes it Windows-only.
+sherpa-onnx = { version = "1", default-features = false }
+
+# tray-icon's Linux backend creates GTK menu widgets. GTK must be initialized
+# explicitly before those widgets are constructed.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+
 # Windows 消息泵（托盘需要）
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
@@ -95,9 +104,6 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_Threading",
     "Win32_UI_Controls",
 ] }
-
-# sherpa-onnx 官方 Rust crate，shared = 使用预编译 DLL
-sherpa-onnx = { version = "1", default-features = false }
 
 [build-dependencies]
 winresource = "0.1.31"

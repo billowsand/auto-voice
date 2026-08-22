@@ -5,7 +5,7 @@ target/
 *.log.*
 auto-voice.exe
 *.mp3
-models/
+models
 *.7z
 *.whl
 tools/.venv/

@@ -497,6 +497,7 @@ dependencies = [
  "directories",
  "eframe",
  "enigo",
+ "gtk",
  "rdev",
  "reqwest",
  "rubato",

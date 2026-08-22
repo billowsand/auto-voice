@@ -2,6 +2,7 @@ mod asr;
 mod audio;
 mod config;
 mod diarization;
+mod hotkey_ipc;
 mod llm;
 mod lmstudio;
 mod osd;
@@ -11,6 +12,7 @@ mod platform;
 mod runtime;
 mod tray;
 mod ui;
+mod wayland_osd;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -90,6 +92,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Send a compositor PTT event to the running instance.
+    #[cfg(target_os = "linux")]
+    #[command(hide = true)]
+    Hotkey {
+        #[arg(value_enum)]
+        action: HotkeyAction,
+    },
+    /// Run the isolated Wayland OSD surface.
+    #[cfg(target_os = "linux")]
+    #[command(hide = true)]
+    OsdAgent,
     /// Transcribe an audio file to Markdown
     Transcribe {
         /// Input audio file (mp3, wav, flac, ogg, m4a)
@@ -146,6 +159,13 @@ enum Commands {
         #[arg(long, default_value = "listening")]
         phase: osd_demo::DemoPhase,
     },
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Clone, clap::ValueEnum)]
+enum HotkeyAction {
+    Press,
+    Release,
 }
 
 // ── Resolved config (CLI > config.toml > hardcoded defaults) ────────────────
@@ -396,11 +416,28 @@ async fn main() -> Result<()> {
     match cli.command {
         // ── 无参数双击启动 → 系统托盘 PTT 模式 ─────────────────────────────
         None => {
+            #[cfg(target_os = "linux")]
+            if platform::is_wayland_session() {
+                hotkey_ipc::ensure_no_running_instance()?;
+            }
             tray::run_tray(tray::TrayConfig {
                 runtime: app.build_runtime(&file_cfg),
                 lmstudio: app.build_lmstudio_config(),
                 settings: file_cfg,
             })?;
+        }
+
+        #[cfg(target_os = "linux")]
+        Some(Commands::Hotkey { action }) => {
+            let message: &[u8] = match action {
+                HotkeyAction::Press => b"press",
+                HotkeyAction::Release => b"release",
+            };
+            hotkey_ipc::send(message)?;
+        }
+        #[cfg(target_os = "linux")]
+        Some(Commands::OsdAgent) => {
+            wayland_osd::run()?;
         }
 
         Some(Commands::Transcribe {

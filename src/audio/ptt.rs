@@ -27,21 +27,94 @@ enum Outcome {
     Failed(String),
 }
 
+/// Omarchy renders desktop notifications as compositor-native overlays. On Wayland this is
+/// more reliable than an eframe child viewport: it is global across workspaces, never takes
+/// keyboard focus, and cannot make the settings window miss compositor pings.
+struct WaylandOsd {
+    enabled: bool,
+    notification_id: Option<u32>,
+}
+
+impl WaylandOsd {
+    fn new(desktop_osd_unavailable: bool) -> Self {
+        Self {
+            enabled: cfg!(target_os = "linux")
+                && crate::platform::is_wayland_session()
+                && desktop_osd_unavailable,
+            notification_id: None,
+        }
+    }
+
+    fn show(&mut self, title: &str, body: &str, expire_ms: u32) {
+        if !self.enabled {
+            return;
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            let kind = if title.contains("正在聆听") {
+                "listening"
+            } else if title.contains("正在转写") {
+                "processing"
+            } else if title.contains("已插入") {
+                "done"
+            } else {
+                "failed"
+            };
+            if crate::wayland_osd::show(kind, body).is_ok() {
+                return;
+            }
+
+            // If the isolated renderer cannot start, preserve status feedback through the
+            // compositor-native notification layer rather than failing the dictation cycle.
+            let mut command = std::process::Command::new("notify-send");
+            command.args([
+                "--print-id",
+                "--app-name=Auto Voice",
+                "--urgency=low",
+                "--icon=audio-input-microphone-symbolic",
+                &format!("--expire-time={expire_ms}"),
+            ]);
+            if let Some(id) = self.notification_id {
+                command.arg(format!("--replace-id={id}"));
+            }
+            match command.args([title, body]).output() {
+                Ok(output) if output.status.success() => {
+                    self.notification_id = String::from_utf8_lossy(&output.stdout)
+                        .trim()
+                        .parse()
+                        .ok()
+                        .or(self.notification_id);
+                }
+                Ok(output) => tracing::warn!(
+                    "Omarchy OSD notification failed: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ),
+                Err(error) => tracing::warn!("Failed to run notify-send: {error}"),
+            }
+        }
+    }
+}
+
 pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
     #[cfg(target_os = "linux")]
     if crate::platform::is_wayland_session() {
-        anyhow::bail!(
-            "Wayland global PTT requires the XDG GlobalShortcuts Portal backend; use X11 or open Settings to review platform capabilities"
-        );
+        // Keep the worker alive so it can load/reload the ASR model and expose an honest
+        // engine status in Settings. rdev listens through XWayland here, which may only see
+        // keys while an X11/XWayland application has focus; the compositor binding below
+        // supplies native Wayland-wide press/release events instead.
+        tracing::info!("Wayland session: using compositor press/release signals for PTT");
     }
 
     let use_osd = osd.is_some();
+    let mut wayland_osd = WaylandOsd::new(!use_osd);
+    let has_visual_osd = use_osd || wayland_osd.enabled;
     tracing::info!(
         "PTT ready | 触发键: {} | 麦克风: {}",
         runtime.live().ptt_key,
         runtime.live().input_device.as_deref().unwrap_or("系统默认"),
     );
-    if !use_osd {
+    if !has_visual_osd {
         println!(
             "PTT 模式 — 按住 [{}] 开始录音，松开后自动识别并粘贴",
             runtime.live().ptt_key
@@ -58,11 +131,17 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
     // ── 音频 channel ─────────────────────────────────────────────────────────
     let (audio_tx, audio_rx) = mpsc::sync_channel::<Vec<f32>>(128);
 
+    #[cfg(target_os = "linux")]
+    let _wayland_ipc = crate::platform::is_wayland_session()
+        .then(|| crate::hotkey_ipc::Server::start(held.clone()))
+        .transpose()?;
+
     // ── rdev 全局键盘钩子（独立线程）─────────────────────────────────────────
     //
     // 回调运行在 WH_KEYBOARD_LL 里：超过 LowLevelHooksTimeout（默认 300ms）Windows 会
     // 直接把钩子摘掉，整个 PTT 就此失灵。所以这里只更新按键集合与一个原子标志，
     // 开麦克风、弹浮层、查前台窗口等等一律留给主循环。
+    #[cfg(not(target_os = "linux"))]
     {
         let held = held.clone();
         let running = running.clone();
@@ -111,12 +190,25 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
         });
     }
 
+    // X11 can still use rdev, but on Wayland it only sees keys delivered through XWayland.
+    // Running it beside the compositor signal backend creates a split state where one backend
+    // observes the press and the other misses the release.
+    #[cfg(target_os = "linux")]
+    if !crate::platform::is_wayland_session() {
+        let held = held.clone();
+        let running = running.clone();
+        let runtime = runtime.clone();
+        std::thread::spawn(move || listen_with_rdev(held, running, runtime));
+    }
+
     // ── Ctrl+C ───────────────────────────────────────────────────────────────
     {
         let running = running.clone();
+        let runtime = runtime.clone();
         ctrlc::set_handler(move || {
             println!("\nStopping...");
             running.store(false, Ordering::SeqCst);
+            runtime.request_shutdown();
         })
         .ok();
     }
@@ -127,6 +219,7 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
     let mut engine: Option<Arc<AsrEngine>> = None;
     let mut stream: Option<cpal::Stream> = None;
     let mut active_format: Option<(u32, usize)> = None;
+    let mut recording_started_at: Option<std::time::Instant> = None;
     // Runs the recogniser over the audio so far while the key is still held, so the overlay can
     // show the transcript building up. Retired the moment the key is released.
     let mut preview: Option<LivePreview> = None;
@@ -134,7 +227,7 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
     // 开麦失败后等触发键松开再重试，否则会在按住期间每 10ms 重试一次。
     let mut blocked_until_release = false;
 
-    while running.load(Ordering::SeqCst) {
+    while running.load(Ordering::SeqCst) && !runtime.shutdown_requested() {
         let is_held = held.load(Ordering::SeqCst);
         if !is_held {
             blocked_until_release = false;
@@ -186,6 +279,7 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
                         let sample_rate = opened.sample_rate;
                         let channels = opened.channels;
                         active_format = Some((sample_rate, channels));
+                        recording_started_at = Some(std::time::Instant::now());
                         stream = Some(opened.stream);
                         match osd {
                             Some(ref osd) => {
@@ -204,13 +298,26 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
                                         )
                                     });
                             }
-                            None => eprint!("\r🔴 录音中...                    "),
+                            None => {
+                                wayland_osd.show(
+                                    "Auto Voice · 正在聆听",
+                                    "松开右 Alt 后开始转写",
+                                    0,
+                                );
+                                if !wayland_osd.enabled {
+                                    eprint!("\r🔴 录音中...                    ");
+                                }
+                            }
                         }
                     }
                     Err(error) => {
                         tracing::error!("打开麦克风失败: {}", error);
                         blocked_until_release = true;
-                        report(&osd, Outcome::Failed("麦克风打开失败，检查录音权限".into()));
+                        report(
+                            &osd,
+                            &mut wayland_osd,
+                            Outcome::Failed("麦克风打开失败，检查录音权限".into()),
+                        );
                     }
                 }
             }
@@ -218,6 +325,13 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
 
         // ② 录音中 → 收音 + 更新浮层电平
         if stream.is_some() && is_held {
+            if recording_started_at
+                .is_some_and(|started| started.elapsed() >= Duration::from_secs(90))
+            {
+                tracing::warn!("PTT safety timeout reached; forcing release");
+                held.store(false, Ordering::SeqCst);
+                continue;
+            }
             let channels = active_format.map_or(1, |(_, channels)| channels);
             match audio_rx.recv_timeout(Duration::from_millis(30)) {
                 Ok(chunk) => {
@@ -239,6 +353,7 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
         // ③ 松开触发键 → 关麦克风，收回回调里已经送出的尾音，然后识别 + 粘贴
         if let Some(opened) = stream.take() {
             drop(opened);
+            recording_started_at = None;
             tracing::info!("麦克风已关闭");
             let (sample_rate, channels) = active_format.take().unwrap_or((16_000, 1));
             // Retire the preview before the tail is collected: whatever it has already put on
@@ -252,7 +367,12 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
                     osd.set_level(0.0);
                     osd.set_processing();
                 }
-                None => eprint!("\r⏳ 识别中...                    "),
+                None => {
+                    wayland_osd.show("Auto Voice · 正在转写", "正在识别并插入活动窗口", 0);
+                    if !wayland_osd.enabled {
+                        eprint!("\r⏳ 识别中...                    ");
+                    }
+                }
             }
 
             let outcome = match engine.as_ref() {
@@ -266,7 +386,7 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
                 }),
             };
             speech_buf.clear();
-            report(&osd, outcome);
+            report(&osd, &mut wayland_osd, outcome);
             continue;
         }
 
@@ -278,15 +398,63 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
+fn listen_with_rdev(held: Arc<AtomicBool>, running: Arc<AtomicBool>, runtime: Runtime) {
+    while running.load(Ordering::SeqCst) {
+        let held = held.clone();
+        let running = running.clone();
+        let runtime = runtime.clone();
+        let mut pressed: HashSet<rdev::Key> = HashSet::new();
+        let result = rdev::listen(move |event| {
+            match event.event_type {
+                rdev::EventType::KeyPress(key) => {
+                    pressed.insert(key);
+                }
+                rdev::EventType::KeyRelease(key) => {
+                    pressed.remove(&key);
+                }
+                _ => return,
+            }
+            let keys = runtime.ptt_keys();
+            held.store(
+                !keys.is_empty() && keys.iter().all(|key| pressed.contains(key)),
+                Ordering::SeqCst,
+            );
+            if !running.load(Ordering::SeqCst) {
+                panic!("rdev stop");
+            }
+        });
+        match result {
+            Ok(()) => tracing::warn!("Global keyboard hook stopped; reinstalling"),
+            Err(error) => {
+                tracing::error!("Global keyboard hook failed, retrying: {error:?}");
+                std::thread::sleep(Duration::from_secs(2));
+            }
+        }
+    }
+}
+
 /// 把一次听写的结果告诉用户：托盘模式走浮层，CLI 模式走 stderr。
-fn report(osd: &Option<OsdHandle>, outcome: Outcome) {
+fn report(osd: &Option<OsdHandle>, wayland_osd: &mut WaylandOsd, outcome: Outcome) {
+    match &outcome {
+        Outcome::Inserted(text) => wayland_osd.show("Auto Voice · 已插入", text, 2200),
+        Outcome::NothingHeard => {
+            wayland_osd.show("Auto Voice · 未识别", "没有听清，请再试一次", 2600)
+        }
+        Outcome::Failed(message) => wayland_osd.show("Auto Voice · 失败", message, 3500),
+    }
     match (osd, outcome) {
         (Some(osd), Outcome::Inserted(text)) => osd.set_done(&text),
         (Some(osd), Outcome::NothingHeard) => osd.set_notice("没有听清，再按住试一次", false),
         (Some(osd), Outcome::Failed(message)) => osd.set_notice(message, true),
-        (None, Outcome::Inserted(_)) => eprint!("\r✅ 已粘贴                       \n"),
-        (None, Outcome::NothingHeard) => eprint!("\r🤷 没有识别到语音               \n"),
-        (None, Outcome::Failed(message)) => eprint!("\r❌ {message}\n"),
+        (None, Outcome::Inserted(_)) if !wayland_osd.enabled => {
+            eprint!("\r✅ 已粘贴                       \n")
+        }
+        (None, Outcome::NothingHeard) if !wayland_osd.enabled => {
+            eprint!("\r🤷 没有识别到语音               \n")
+        }
+        (None, Outcome::Failed(message)) if !wayland_osd.enabled => eprint!("\r❌ {message}\n"),
+        (None, _) => {}
     }
 }
 
@@ -405,6 +573,11 @@ fn process_and_paste(
             return Outcome::Failed("识别失败，详见日志".into());
         }
     };
+    tracing::info!(
+        "ASR done: {:.1}s audio → {} chars",
+        mono.len() as f32 / 16_000.0,
+        seg.text.chars().count()
+    );
 
     if !is_meaningful_pub(&seg.text) {
         return Outcome::NothingHeard;
@@ -422,13 +595,24 @@ fn process_and_paste(
         }
     };
 
-    set_clipboard_pub(&final_text);
-    std::thread::sleep(Duration::from_millis(80));
-    paste_at_cursor();
+    if let Err(error) = set_clipboard_pub(&final_text) {
+        tracing::error!("Clipboard write failed: {error:#}");
+        return Outcome::Failed("无法写入 Wayland 剪贴板".into());
+    }
+    std::thread::sleep(Duration::from_millis(120));
+    if let Err(error) = paste_at_cursor() {
+        tracing::error!("Paste dispatch failed: {error:#}");
+        return Outcome::Failed("文字已复制，但无法发送粘贴快捷键".into());
+    }
     Outcome::Inserted(final_text)
 }
 
-fn paste_at_cursor() {
+fn paste_at_cursor() -> Result<()> {
+    #[cfg(target_os = "linux")]
+    if crate::platform::is_wayland_session() {
+        return wayland_paste_at_cursor();
+    }
+
     use enigo::{Direction, Enigo, Key, Keyboard, Settings};
     match Enigo::new(&Settings::default()) {
         Ok(mut enigo) => {
@@ -437,10 +621,123 @@ fn paste_at_cursor() {
             #[cfg(not(target_os = "macos"))]
             let modifier = Key::Control;
 
-            let _ = enigo.key(modifier, Direction::Press);
-            let _ = enigo.key(Key::Unicode('v'), Direction::Click);
-            let _ = enigo.key(modifier, Direction::Release);
+            enigo.key(modifier, Direction::Press)?;
+            enigo.key(Key::Unicode('v'), Direction::Click)?;
+            enigo.key(modifier, Direction::Release)?;
+            Ok(())
         }
-        Err(e) => tracing::warn!("enigo init failed: {}", e),
+        Err(error) => Err(error.into()),
     }
+}
+
+/// Wayland paste delivery: pick the chord the focused application understands, then inject it.
+///
+/// Terminals do not paste on Ctrl+V (the shell reads it as literal-next), which is why a
+/// "successful" paste used to do nothing in a terminal. Omarchy answers its universal paste
+/// with Shift+Insert there; mirror that. Delivery goes through Hyprland's own synthetic key
+/// state — a down now and a delayed up, exactly like Omarchy's universal clipboard binding —
+/// because `sendshortcut` can leave synthetic keys repeating and `wtype` merges with whatever
+/// modifier the user is still physically holding.
+#[cfg(target_os = "linux")]
+fn wayland_paste_at_cursor() -> Result<()> {
+    let terminal = hyprland_terminal_focused();
+    let (mods, key) = if terminal {
+        ("SHIFT", "Insert")
+    } else {
+        ("CTRL", "V")
+    };
+
+    if crate::platform::is_hyprland_session() {
+        let lua = format!(
+            r#"hl.dispatch(hl.dsp.send_key_state({{ mods = "{mods}", key = "{key}", state = "down" }})); hl.timer(function() hl.dispatch(hl.dsp.send_key_state({{ mods = "{mods}", key = "{key}", state = "up" }})) end, {{ timeout = 50, type = "oneshot" }})"#
+        );
+        match std::process::Command::new("hyprctl")
+            .args(["eval", &lua])
+            .status()
+        {
+            Ok(status) if status.success() => {
+                tracing::info!("Paste shortcut dispatched through Hyprland ({mods}+{key})");
+                return Ok(());
+            }
+            Ok(status) => {
+                tracing::warn!("Hyprland paste dispatch failed with {status}; trying wtype")
+            }
+            Err(error) => {
+                tracing::warn!("hyprctl eval unavailable: {error}; trying wtype")
+            }
+        }
+    }
+
+    // Generic Wayland fallback: wtype speaks virtual-keyboard-unstable-v1, which wlroots
+    // compositors and KWin support, so it does not depend on Hyprland at all.
+    let (mod_name, key_name) = if terminal {
+        ("shift", "Insert")
+    } else {
+        ("ctrl", "v")
+    };
+    match std::process::Command::new("wtype")
+        .args(["-M", mod_name, "-k", key_name, "-m", mod_name])
+        .status()
+    {
+        Ok(status) if status.success() => {
+            tracing::info!("Paste shortcut dispatched through wtype");
+            Ok(())
+        }
+        Ok(status) => anyhow::bail!("wtype paste failed with {status}"),
+        Err(error) => Err(anyhow::anyhow!("failed to run wtype for paste: {error}")),
+    }
+}
+
+/// True when the focused Hyprland window is a terminal emulator, where paste is Shift+Insert.
+/// Query failures are conservative: the regular Ctrl+V is the right choice almost everywhere.
+#[cfg(target_os = "linux")]
+fn hyprland_terminal_focused() -> bool {
+    if !crate::platform::is_hyprland_session() {
+        return false;
+    }
+    let Ok(output) = std::process::Command::new("hyprctl")
+        .args(["activewindow", "-j"])
+        .output()
+    else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&output.stdout) else {
+        return false;
+    };
+    let Some(class) = value.get("class").and_then(|class| class.as_str()) else {
+        return false;
+    };
+    let class = class.to_ascii_lowercase();
+    const TERMINALS: &[&str] = &[
+        "alacritty",
+        "kitty",
+        "foot",
+        "footclient",
+        "ghostty",
+        "com.mitchellh.ghostty",
+        "wezterm",
+        "org.wezfurlong.wezterm",
+        "konsole",
+        "gnome-terminal",
+        "gnome-terminal-server",
+        "xterm",
+        "st",
+        "st-256color",
+        "rio",
+        "contour",
+        "tilix",
+        "terminator",
+        "yakuake",
+        "tilda",
+        "guake",
+        "blackbox",
+        "tabby",
+        "hyper",
+        "warp-terminal",
+        "cool-retro-term",
+    ];
+    TERMINALS.contains(&class.as_str())
 }

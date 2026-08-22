@@ -341,6 +341,9 @@ impl OsdHandle {
             if visible {
                 context.send_viewport_cmd_to(viewport_id(), ViewportCommand::Visible(true));
             }
+            // On non-Windows platforms the hidden overlay viewport is not created at startup.
+            // Repaint the root viewport so DesktopApp can create it on first use.
+            context.request_repaint();
             context.request_repaint_of(viewport_id());
         }
     }

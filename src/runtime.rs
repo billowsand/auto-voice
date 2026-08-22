@@ -45,6 +45,7 @@ struct Inner {
     requested: AtomicU64,
     applied: AtomicU64,
     status: RwLock<EngineStatus>,
+    shutdown: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Clone)]
@@ -63,6 +64,7 @@ impl Runtime {
                 requested: AtomicU64::new(1),
                 applied: AtomicU64::new(0),
                 status: RwLock::new(EngineStatus::Loading),
+                shutdown: std::sync::atomic::AtomicBool::new(false),
             }),
         }
     }
@@ -83,6 +85,14 @@ impl Runtime {
 
     pub fn set_status(&self, status: EngineStatus) {
         *self.write(&self.inner.status) = status;
+    }
+
+    pub fn request_shutdown(&self) {
+        self.inner.shutdown.store(true, Ordering::SeqCst);
+    }
+
+    pub fn shutdown_requested(&self) -> bool {
+        self.inner.shutdown.load(Ordering::SeqCst)
     }
 
     /// Fold a freshly saved config file into the live values. Returns true when the ASR engine

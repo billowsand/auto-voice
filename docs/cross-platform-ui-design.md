@@ -52,6 +52,10 @@ press/release events into the existing PTT state machine.
 ## Viewports
 
 - Root viewport: settings center. Hidden at startup; closing it hides it instead of exiting.
+  Hiding is platform-dependent because winit's `set_visible` is a no-op on Wayland and Hyprland
+  ignores `xdg_toplevel.set_minimized`: Hyprland parks the window on a dedicated special
+  workspace via `hyprctl` (both the classic and the Lua config-manager dispatch syntax are
+  supported), other Wayland compositors get a minimize request, and X11 uses `set_visible`.
 - OSD viewport: transparent, undecorated, mouse-pass-through and excluded from the taskbar.
   It is only visible while recording, processing, or briefly showing completion.
 

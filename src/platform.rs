@@ -60,27 +60,23 @@ pub fn capabilities() -> Capabilities {
     #[cfg(target_os = "linux")]
     {
         let wayland = is_wayland_session();
+        let hyprland = wayland && is_hyprland_session();
         Capabilities {
             platform_name: "Linux",
             session_name: if wayland { "Wayland" } else { "X11" }.to_owned(),
-            global_ptt: if wayland {
+            global_ptt: Capability::Available,
+            overlay_position: if wayland && !hyprland {
                 Capability::Degraded
             } else {
                 Capability::Available
             },
-            overlay_position: if wayland {
+            synthetic_paste: if wayland && !hyprland {
                 Capability::Degraded
             } else {
                 Capability::Available
             },
-            synthetic_paste: if wayland {
-                Capability::Degraded
-            } else {
-                Capability::Available
-            },
-            permission_hint: wayland.then_some(
-                "当前为 Wayland：全局 PTT 需要 GlobalShortcuts Portal，悬浮窗位置由合成器决定。",
-            ),
+            permission_hint: (wayland && !hyprland)
+                .then_some("当前为通用 Wayland：需要合成器提供全局 PTT、悬浮窗定位和模拟粘贴。"),
         }
     }
 
@@ -94,6 +90,169 @@ pub fn capabilities() -> Capabilities {
             synthetic_paste: Capability::Degraded,
             permission_hint: Some("当前平台尚未经过支持验证。"),
         }
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn is_hyprland_session() -> bool {
+    std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
+        || std::env::var("XDG_CURRENT_DESKTOP")
+            .is_ok_and(|desktop| desktop.to_ascii_lowercase().contains("hyprland"))
+}
+
+/// Hide the settings window into the tray. Returns false when the window is not known to the
+/// compositor yet (only possible during the first frames), so the caller can retry.
+///
+/// winit's `set_visible` is a no-op on Wayland and Hyprland ignores `xdg_toplevel.set_minimized`,
+/// so on Hyprland the window is parked on a dedicated special workspace instead. Elsewhere the
+/// minimize request covers compositors that honour it (GNOME, KDE) and X11.
+#[cfg(target_os = "linux")]
+pub fn hide_main_window(ctx: &eframe::egui::Context) -> bool {
+    use eframe::egui::{ViewportCommand, ViewportId};
+
+    if is_hyprland_session() {
+        return hyprland_park_main_window();
+    }
+    if is_wayland_session() {
+        ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Minimized(true));
+    } else {
+        ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Visible(false));
+    }
+    true
+}
+
+/// Bring the settings window back after [`hide_main_window`].
+///
+/// There is no client-side unminimize on Wayland (winit only forwards the minimize direction),
+/// so on Hyprland the window is moved back to the active workspace and focused via hyprctl.
+#[cfg(target_os = "linux")]
+pub fn show_main_window(ctx: &eframe::egui::Context) {
+    use eframe::egui::{ViewportCommand, ViewportId};
+
+    if is_hyprland_session() {
+        hyprland_restore_main_window();
+        return;
+    }
+    if !is_wayland_session() {
+        ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Focus);
+    }
+}
+
+/// Wayland app id set by `ui::native_options`; Hyprland reports it as the window class.
+#[cfg(target_os = "linux")]
+const HYPRLAND_WINDOW_CLASS: &str = "io.github.billowsand.auto-voice";
+
+/// Hyprland special workspace the settings window is parked on while "in the tray".
+#[cfg(target_os = "linux")]
+const HYPRLAND_PARK_WORKSPACE: &str = "special:auto-voice";
+
+#[cfg(target_os = "linux")]
+fn hyprctl(args: &[&str]) -> bool {
+    std::process::Command::new("hyprctl")
+        .args(args)
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+/// The `0x…` address Hyprland assigned to the settings window, or `None` while the window has
+/// not been mapped yet.
+#[cfg(target_os = "linux")]
+fn hyprland_main_window_address() -> Option<String> {
+    let output = std::process::Command::new("hyprctl")
+        .args(["clients", "-j"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let clients: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    clients
+        .as_array()?
+        .iter()
+        .find(|client| {
+            client.get("class").and_then(|class| class.as_str()) == Some(HYPRLAND_WINDOW_CLASS)
+        })
+        .and_then(|client| client.get("address"))
+        .and_then(|address| address.as_str())
+        .map(str::to_owned)
+}
+
+#[cfg(target_os = "linux")]
+fn hyprland_active_workspace_id() -> Option<i64> {
+    let output = std::process::Command::new("hyprctl")
+        .args(["activeworkspace", "-j"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    serde_json::from_slice::<serde_json::Value>(&output.stdout)
+        .ok()?
+        .get("id")?
+        .as_i64()
+}
+
+/// Hyprland can run on the Lua config manager (default since the Lua migration), where
+/// `hyprctl dispatch` expects a Lua expression (`hl.dsp.…`) instead of the classic
+/// `dispatcher args` syntax. Probe once with a no-op and cache the answer.
+#[cfg(target_os = "linux")]
+fn hyprctl_lua_dispatch() -> bool {
+    use std::sync::OnceLock;
+    static LUA_DISPATCH: OnceLock<bool> = OnceLock::new();
+    *LUA_DISPATCH.get_or_init(|| hyprctl(&["dispatch", "hl.dsp.no_op()"]))
+}
+
+#[cfg(target_os = "linux")]
+fn hyprland_park_main_window() -> bool {
+    let Some(address) = hyprland_main_window_address() else {
+        return false;
+    };
+    let selector = format!("address:{address}");
+    if hyprctl_lua_dispatch() {
+        hyprctl(&[
+            "dispatch",
+            &format!(
+                "hl.dsp.window.move({{ workspace = \"{HYPRLAND_PARK_WORKSPACE}\", window = \"{selector}\" }})"
+            ),
+        ])
+    } else {
+        hyprctl(&[
+            "dispatch",
+            &format!("movetoworkspacesilent {HYPRLAND_PARK_WORKSPACE},{selector}"),
+        ])
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn hyprland_restore_main_window() {
+    let Some(address) = hyprland_main_window_address() else {
+        return;
+    };
+    let selector = format!("address:{address}");
+    let workspace = hyprland_active_workspace_id();
+    if hyprctl_lua_dispatch() {
+        if let Some(workspace) = workspace {
+            hyprctl(&[
+                "dispatch",
+                &format!(
+                    "hl.dsp.window.move({{ workspace = \"{workspace}\", window = \"{selector}\" }})"
+                ),
+            ]);
+        }
+        hyprctl(&[
+            "dispatch",
+            &format!("hl.dsp.focus({{ window = \"{selector}\" }})"),
+        ]);
+    } else {
+        if let Some(workspace) = workspace {
+            hyprctl(&[
+                "dispatch",
+                &format!("movetoworkspace {workspace},{selector}"),
+            ]);
+        }
+        hyprctl(&["dispatch", &format!("focuswindow {selector}")]);
     }
 }
 
@@ -185,10 +344,33 @@ pub fn overlay_origin(size: Vec2, card_inset: Vec2, follow_caret: bool) -> Optio
     ))
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "linux")]
+pub fn overlay_origin(size: Vec2, card_inset: Vec2, follow_caret: bool) -> Option<Pos2> {
+    if !is_wayland_session() || !follow_caret {
+        return None;
+    }
+
+    // Wayland intentionally does not expose another application's text caret. Hyprland does
+    // expose the pointer position, which is the closest compositor-wide anchor available and
+    // keeps the OSD beside the user's current insertion target instead of inside Settings.
+    let output = std::process::Command::new("hyprctl")
+        .args(["cursorpos", "-j"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    let x = value.get("x")?.as_f64()? as f32;
+    let y = value.get("y")?.as_f64()? as f32;
+    Some(Pos2::new(
+        x + 14.0 - card_inset.x,
+        y + 22.0 - card_inset.y - size.y * 0.15,
+    ))
+}
+
+#[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
 pub fn overlay_origin(_size: Vec2, _card_inset: Vec2, _follow_caret: bool) -> Option<Pos2> {
-    // X11/Wayland/macOS caret probing needs AT-SPI / Accessibility permissions; the overlay
-    // falls back to a fixed spot above the taskbar until those backends land.
     None
 }
 
@@ -434,6 +616,7 @@ pub fn prepare_overlay_window(_window_title: &str) -> Option<OverlayCompositing>
     Some(OverlayCompositing::PerPixelAlpha)
 }
 
+#[cfg(target_os = "windows")]
 fn overlay_mode_override() -> Option<String> {
     std::env::var("AUTO_VOICE_OVERLAY")
         .ok()

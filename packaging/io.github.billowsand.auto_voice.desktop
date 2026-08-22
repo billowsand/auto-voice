@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Auto Voice
+Comment=Local push-to-talk speech transcription
+Exec=auto-voice
+Icon=auto-voice
+Terminal=false
+Categories=AudioVideo;Audio;Utility;
+StartupNotify=false
+X-GNOME-UsesNotifications=true

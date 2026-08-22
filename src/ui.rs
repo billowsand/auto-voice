@@ -88,6 +88,11 @@ pub struct DesktopApp {
     system_fonts: Vec<platform::SystemFont>,
     font_search: String,
     applied_font_families: Option<Vec<String>>,
+    /// Wayland ignores `with_visible(false)` at window creation, so a configured install has to
+    /// hide itself during the first frames instead of starting hidden. Counts down the retries;
+    /// 0 means done (or nothing to do).
+    #[cfg(target_os = "linux")]
+    hide_on_start_attempts: u8,
     _tray: tray_icon::TrayIcon,
 }
 
@@ -112,6 +117,21 @@ impl DesktopApp {
         let exit_requested = Arc::new(AtomicBool::new(false));
         let exit_for_handler = Arc::clone(&exit_requested);
         let context = creation.egui_ctx.clone();
+
+        // A hidden Wayland window can leave winit waiting indefinitely even though background
+        // PTT and tray threads are still active. Keep a lightweight wake source outside the UI
+        // loop so compositor pings, Ctrl+C shutdown, and tray actions are always dispatched.
+        #[cfg(target_os = "linux")]
+        {
+            let context = context.clone();
+            let exit_requested = Arc::clone(&exit_requested);
+            std::thread::spawn(move || {
+                while !exit_requested.load(Ordering::SeqCst) {
+                    context.request_repaint();
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            });
+        }
 
         // Clicking the tray icon opens settings, the way every other tray app behaves.
         let context_for_tray = context.clone();
@@ -165,6 +185,8 @@ impl DesktopApp {
             system_fonts,
             font_search: String::new(),
             applied_font_families,
+            #[cfg(target_os = "linux")]
+            hide_on_start_attempts: if wizard_step.is_none() { 100 } else { 0 },
             _tray: tray,
         }
     }
@@ -233,6 +255,11 @@ impl DesktopApp {
 
     fn hide_window(&mut self, ctx: &egui::Context) {
         self.flush_pending_save();
+        #[cfg(target_os = "linux")]
+        {
+            platform::hide_main_window(ctx);
+        }
+        #[cfg(not(target_os = "linux"))]
         ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Visible(false));
     }
 
@@ -358,6 +385,11 @@ impl DesktopApp {
         }
         self.wizard_step = None;
         self.commit();
+        #[cfg(target_os = "linux")]
+        {
+            platform::hide_main_window(ctx);
+        }
+        #[cfg(not(target_os = "linux"))]
         ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Visible(false));
         let live = self.runtime.live();
         self.osd.set_notice(
@@ -1025,24 +1057,49 @@ impl DesktopApp {
 
 impl eframe::App for DesktopApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        #[cfg(target_os = "linux")]
+        {
+            // tray-icon's AppIndicator backend is GTK based, while eframe owns the native
+            // event loop. Pump pending GTK work on the main thread so StatusNotifier items
+            // are registered and menu clicks reach Omarchy/other Linux panels.
+            let context = gtk::glib::MainContext::default();
+            if context.pending() {
+                context.iteration(false);
+            }
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+
         let close_requested = ctx.input(|input| input.viewport().close_requested());
-        if close_requested && !self.exit_requested.load(Ordering::SeqCst) {
-            // Closing the window means "get out of my way", not "quit": stay in the tray.
+        if close_requested || self.runtime.shutdown_requested() {
             self.flush_pending_save();
-            ctx.send_viewport_cmd(ViewportCommand::CancelClose);
-            ctx.send_viewport_cmd(ViewportCommand::Visible(false));
+            self.runtime.request_shutdown();
+            self.exit_requested.store(true, Ordering::SeqCst);
+            ctx.send_viewport_cmd(ViewportCommand::Close);
         }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        #[cfg(target_os = "linux")]
+        if self.hide_on_start_attempts > 0 {
+            self.hide_on_start_attempts -= 1;
+            if platform::hide_main_window(ui.ctx()) {
+                self.hide_on_start_attempts = 0;
+            }
+        }
+
         let monitor_size = ui.ctx().input(|input| input.viewport().monitor_size);
         let visible = self.osd.native_surface_visible();
-        let osd_handle = self.osd.clone();
-        ui.ctx().show_viewport_deferred(
-            osd::viewport_id(),
-            osd::viewport_builder(monitor_size, visible),
-            move |ui, _class| osd::draw(ui, &osd_handle),
-        );
+        // Windows keeps the click-through surface alive to avoid focus stealing when it is
+        // shown again. Other compositors can map an allegedly hidden transparent viewport as
+        // an opaque/ghost rectangle, so do not create it until the OSD is actually needed.
+        if cfg!(target_os = "windows") || visible {
+            let osd_handle = self.osd.clone();
+            ui.ctx().show_viewport_deferred(
+                osd::viewport_id(),
+                osd::viewport_builder(monitor_size, visible),
+                move |ui, _class| osd::draw(ui, &osd_handle),
+            );
+        }
 
         if !self.centred {
             self.centred = true;
@@ -1092,14 +1149,20 @@ impl eframe::App for DesktopApp {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.flush_pending_save();
+        self.runtime.request_shutdown();
         MenuEvent::set_event_handler::<fn(MenuEvent)>(None);
         TrayIconEvent::set_event_handler::<fn(TrayIconEvent)>(None);
     }
 }
 
 fn show_settings_window(context: &egui::Context) {
-    context.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Visible(true));
-    context.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Focus);
+    #[cfg(target_os = "linux")]
+    platform::show_main_window(context);
+    #[cfg(not(target_os = "linux"))]
+    {
+        context.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Visible(true));
+        context.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Focus);
+    }
     context.request_repaint();
 }
 

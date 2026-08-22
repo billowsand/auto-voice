@@ -211,7 +211,9 @@ fn llm_worker(
         };
 
         println!("{}", final_text);
-        set_clipboard_pub(&final_text);
+        if let Err(error) = set_clipboard_pub(&final_text) {
+            tracing::warn!("Clipboard write failed: {error:#}");
+        }
 
         if let Some(ref mut w) = writer {
             use std::io::Write;
@@ -241,15 +243,47 @@ fn rms_energy(samples: &[f32], channels: usize) -> f32 {
     (sum_sq / frames as f32).sqrt()
 }
 
-pub fn set_clipboard_pub(text: &str) {
-    match arboard::Clipboard::new() {
-        Ok(mut cb) => {
-            if let Err(e) = cb.set_text(text) {
-                tracing::warn!("Clipboard write failed: {}", e);
+pub fn set_clipboard_pub(text: &str) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    if crate::platform::is_wayland_session() {
+        use anyhow::Context;
+        use std::io::Write;
+
+        let mut child = std::process::Command::new("wl-copy")
+            .args(["--type", "text/plain;charset=utf-8"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .context("failed to start wl-copy")?;
+        child
+            .stdin
+            .take()
+            .context("wl-copy stdin is unavailable")?
+            .write_all(text.as_bytes())
+            .context("failed to send text to wl-copy")?;
+        // wl-copy forks a daemon that serves the selection until another client replaces it,
+        // and the daemon inherits our stderr pipe. wait_with_output() reads stderr to EOF
+        // before reaping, which would block for as long as our text stays on the clipboard —
+        // the dictation cycle hangs at "正在转写" and the paste is never sent. Reap the
+        // foreground process as soon as it exits instead, and only read stderr when it
+        // failed: on failure no daemon was forked, so the pipe reaches EOF on its own.
+        let status = child.wait().context("failed to wait for wl-copy")?;
+        if !status.success() {
+            use std::io::Read;
+            let mut stderr = String::new();
+            if let Some(mut pipe) = child.stderr.take() {
+                let _ = pipe.read_to_string(&mut stderr);
             }
+            anyhow::bail!("wl-copy failed: {}", stderr.trim());
         }
-        Err(e) => tracing::warn!("Clipboard init failed: {}", e),
+        tracing::info!("Clipboard ready through native Wayland wl-copy");
+        return Ok(());
     }
+
+    let mut clipboard = arboard::Clipboard::new()?;
+    clipboard.set_text(text)?;
+    Ok(())
 }
 
 fn build_f32_stream(
