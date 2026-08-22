@@ -5,7 +5,7 @@ use sherpa_onnx::{
 };
 
 /// ASR backend selection with all required model paths.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AsrConfig {
     SenseVoice {
         model: String,
@@ -33,7 +33,7 @@ pub struct Segment {
 }
 
 /// Optional homophone replacement config (外挂词典 + FST 规则文件路径).
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct HrConfig {
     /// 发音词典文件路径，例如 "models/hr/lexicon.txt"
     pub lexicon: Option<String>,

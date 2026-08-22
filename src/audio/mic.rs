@@ -28,10 +28,6 @@ pub struct LiveConfig {
     pub lm_url: String,
     pub lm_model: String,
     pub no_llm: bool,
-    /// PTT 触发键描述字符串，透传给 ptt.rs 解析（如 "LeftCtrl+LeftAlt"）
-    pub ptt_key: Option<String>,
-    /// OSD 句柄（托盘模式下注入，CLI 模式下为 None）
-    pub osd: Option<crate::osd::OsdHandle>,
 }
 
 pub fn run_live(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {

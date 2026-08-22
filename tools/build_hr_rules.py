@@ -4,13 +4,17 @@
 Generate ``models/hr/replace.fst`` for sherpa-onnx's HomophoneReplacer
 (``hr_rule_fsts`` config).
 
-Edit ``user-words.txt`` (one rule per line: ``拼音串<TAB>目标汉字``) and rerun
-this script to refresh ``replace.fst``.
+The simplest way to add words: edit ``user-words.txt`` and put **one correct
+Chinese word per line** — no pinyin needed. The script looks every character up
+in the sherpa-onnx ``lexicon.txt`` and derives the tone-numbered pinyin itself:
 
-Usage:
-    python tools/build_hr_rules.py
-    python tools/build_hr_rules.py --words tools/user-words.txt \\
-            --out models/hr/replace.fst
+    # user-words.txt
+    玄戒
+    玄戒芯片
+
+then rerun:
+
+    tools/.venv/Scripts/python.exe tools/build_hr_rules.py
 
 Requires ``kaldifst`` — the same OpenFst build sherpa-onnx links against, so
 the binary format is correct by construction:
@@ -20,6 +24,31 @@ the binary format is correct by construction:
 kaldifst only publishes wheels up to CPython 3.13. On a newer interpreter pip
 falls back to a source build and fails; use a 3.11–3.13 environment instead
 (this repo keeps one at ``tools/.venv``).
+
+
+Rule syntax (three equivalent forms, picked per line)
+------------------------------------------------------
+1. Chinese word only (recommended)::
+
+       玄戒
+
+   The pinyin is looked up character by character in ``--lexicon``
+   (default ``models/hr/lexicon.txt``). Every Chinese character must exist in
+   the lexicon. The lookup yields each character's *primary* reading, so a
+   polyphone whose intended reading is not the primary one needs form 2.
+
+2. pinyin<TAB>Chinese (or pinyin<spaces>Chinese) — explicit pinyin, for
+   polyphones / unusual readings / overrides::
+
+       xuan2jie4\t玄戒
+       le4shi2 乐事            # force a non-primary reading
+
+3. pynini style (kept for compatibility with the sherpa-onnx colab recipe)::
+
+       pynini.cross("xuan2jie4", "玄戒")
+
+The match side is always pinyin and must be ASCII; the replacement side must be
+non-ASCII (Chinese). Lines that cannot be honoured are skipped with a warning.
 
 
 How the rule FST is used at runtime
@@ -65,9 +94,10 @@ match — the behaviour cdrewrite gives.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 try:
     import kaldifst
@@ -81,6 +111,7 @@ except ImportError:  # pragma: no cover - environment problem, not logic
 # ── Defaults ────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent.parent  # repo root
 DEFAULT_WORDS = ROOT / "tools" / "user-words.txt"
+DEFAULT_LEXICON = ROOT / "models" / "hr" / "lexicon.txt"
 DEFAULT_OUT = ROOT / "models" / "hr" / "replace.fst"
 
 # Cost of copying one byte through unchanged. Rule arcs cost 0, so any rule is
@@ -90,53 +121,153 @@ COPY_COST = 1.0
 
 Rule = Tuple[str, str]
 
+# A run of CJK characters — used to detect the "Chinese word only" form.
+_CJK_RE = re.compile(r"[一-鿿]")
+
+
+# ── Lexicon (hanzi -> tone-numbered pinyin) ─────────────────────────────────
+
+
+def load_lexicon(path: Path) -> Dict[str, str]:
+    """Build a ``{single_hanzi: pinyin}`` map from sherpa-onnx's lexicon.
+
+    The file is ``word<TAB-or-spaces>pinyin pinyin ...`` per line. We keep only
+    single-character words (which carry exactly one reading) so each hanzi maps
+    to its primary tone-numbered pinyin. Multi-character entries are ignored —
+    whole words are assembled by concatenating per-character readings.
+    """
+    table: Dict[str, str] = {}
+    if not path.exists():
+        return table
+
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        word, readings = parts[0], parts[1:]
+        # Keep a single primary reading per character; first occurrence wins.
+        if len(word) == 1 and word not in table:
+            table[word] = readings[0]
+    return table
+
+
+def lookup_pinyin(word: str, lexicon: Dict[str, str]) -> Tuple[str, List[str]]:
+    """Return ``(pinyin, missing)`` for a Chinese word looked up per character.
+
+    ``pinyin`` is the concatenation of each character's tone-numbered reading
+    (spaces stripped), matching the byte stream sherpa-onnx composes against.
+    ``missing`` lists characters absent from the lexicon.
+    """
+    syllables: List[str] = []
+    missing: List[str] = []
+    for ch in word:
+        if ch.isspace():
+            continue
+        reading = lexicon.get(ch)
+        if reading is None:
+            missing.append(ch)
+        else:
+            syllables.append(reading)
+    return "".join(syllables), missing
+
 
 # ── Rules ──────────────────────────────────────────────────────────────────
 
 
-def load_rules(words_file: Path) -> List[Rule]:
-    """Read ``user-words.txt``.
+def _split_pinyin_chinese(line: str) -> Tuple[str, str] | None:
+    """Parse ``pinyin<whitespace>Chinese`` (explicit-pinyin form).
 
-    Each non-blank, non-``#`` line is one of two shapes:
-        TAB_SEPARATED   pinyin_input<TAB>chinese_output
-        CROSS_STYLE     pynini.cross("pinyin_input", "chinese_output")
+    Returns ``(src, dst)`` or ``None`` if the line does not look like
+    "ASCII pinyin followed by whitespace followed by something".
+    """
+    m = re.match(r"^(\S+)\s+(.+)$", line)
+    if not m:
+        return None
+    src, dst = m.group(1).strip(), m.group(2).strip()
+    # Only treat the leading token as pinyin if it is pure ASCII letters/digits;
+    # otherwise the line is probably a bare Chinese word containing no space.
+    if not re.fullmatch(r"[A-Za-z0-9]+", src):
+        return None
+    return src, dst
+
+
+def _parse_pynini_cross(line: str) -> Tuple[str, str] | None:
+    """Parse ``pynini.cross('src', 'dst')`` — accept either kind of quote."""
+    chosen: List[str] = []
+    for q in ("'", '"'):
+        i = 0
+        chosen = []
+        while len(chosen) < 2:
+            a = line.find(q, i)
+            if a < 0:
+                break
+            b = line.find(q, a + 1)
+            if b < 0:
+                break
+            chosen.append(line[a + 1 : b])
+            i = b + 1
+        if len(chosen) == 2:
+            break
+    if len(chosen) != 2 or not chosen[0]:
+        return None
+    return chosen[0], chosen[1]
+
+
+def load_rules(words_file: Path, lexicon: Dict[str, str]) -> List[Rule]:
+    """Read ``user-words.txt`` into ``(pinyin, chinese)`` rules.
+
+    Each non-blank, non-``#`` line is one of:
+        CHINESE_ONLY    玄戒                     (pinyin derived from lexicon)
+        EXPLICIT        xuan2jie4<TAB>玄戒       (whitespace-separated)
+        CROSS_STYLE     pynini.cross("xuan2jie4", "玄戒")
     """
     if not words_file.exists():
         return []
 
     rules: List[Rule] = []
-    for raw in words_file.read_text(encoding="utf-8").splitlines():
+    for lineno, raw in enumerate(
+        words_file.read_text(encoding="utf-8").splitlines(), start=1
+    ):
         line = raw.split("#", 1)[0].strip()
         if not line:
             continue
 
-        if "\t" in line:
-            src, dst = line.split("\t", 1)
-            rules.append((src.strip(), dst.strip()))
+        # pynini style (check first: it may contain spaces inside quotes).
+        if "cross" in line:
+            parsed = _parse_pynini_cross(line)
+            if parsed:
+                rules.append(parsed)
+            else:
+                print(f"  skip line {lineno} (unparsable cross): {line!r}",
+                      file=sys.stderr)
             continue
 
-        # pynini.cross('src', 'dst') — accept either kind of quote.
-        # Take the first two quoted spans.
-        chosen: List[str] = []
-        for q in ("'", '"'):
-            i = 0
-            while len(chosen) < 2:
-                a = line.find(q, i)
-                if a < 0:
-                    break
-                b = line.find(q, a + 1)
-                if b < 0:
-                    break
-                chosen.append(line[a + 1 : b])
-                i = b + 1
-            if len(chosen) == 2:
-                break
-
-        if len(chosen) != 2 or not chosen[0]:
-            print(f"  skip (unparsable): {line!r}", file=sys.stderr)
+        # Explicit pinyin + Chinese (whitespace separated).
+        parsed = _split_pinyin_chinese(line)
+        if parsed:
+            rules.append(parsed)
             continue
 
-        rules.append((chosen[0], chosen[1]))
+        # Bare Chinese word(s): derive pinyin from the lexicon.
+        if _CJK_RE.search(line):
+            word = "".join(line.split())  # drop any internal whitespace
+            pinyin, missing = lookup_pinyin(word, lexicon)
+            if missing:
+                print(
+                    f"  skip line {lineno} {word!r}: character(s) "
+                    f"{''.join(missing)!r} not in lexicon; add explicit pinyin "
+                    f"(e.g. 'pin1yin1 {word}')",
+                    file=sys.stderr,
+                )
+                continue
+            rules.append((pinyin, word))
+            continue
+
+        print(f"  skip line {lineno} (unparsable): {line!r}", file=sys.stderr)
+
     return rules
 
 
@@ -170,7 +301,8 @@ def check_rules(rules: List[Rule]) -> List[Rule]:
 
         if src in seen and seen[src] != dst:
             print(
-                f"  skip {src!r} -> {dst!r}: already mapped to {seen[src]!r}",
+                f"  skip {src!r} -> {dst!r}: already mapped to {seen[src]!r} "
+                f"(same pinyin, different hanzi — keeping the first)",
                 file=sys.stderr,
             )
             continue
@@ -276,6 +408,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--words", type=Path, default=DEFAULT_WORDS,
                     help=f"Path to user-words.txt (default: {DEFAULT_WORDS})")
+    ap.add_argument("--lexicon", type=Path, default=DEFAULT_LEXICON,
+                    help="sherpa-onnx lexicon for hanzi->pinyin lookup "
+                         f"(default: {DEFAULT_LEXICON})")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT,
                     help=f"Path to write replace.fst (default: {DEFAULT_OUT})")
     ap.add_argument("--no-self-test", action="store_true",
@@ -283,8 +418,20 @@ def main() -> int:
     args = ap.parse_args()
 
     print(f"Reading rules from {args.words}")
-    rules = check_rules(load_rules(args.words))
+    lexicon = load_lexicon(args.lexicon)
+    if not lexicon:
+        print(
+            f"  WARNING: lexicon not found/empty at {args.lexicon}; "
+            "Chinese-only lines will be skipped.",
+            file=sys.stderr,
+        )
+    else:
+        print(f"  lexicon: {len(lexicon)} characters from {args.lexicon}")
+
+    rules = check_rules(load_rules(args.words, lexicon))
     print(f"  {len(rules)} rule(s) loaded")
+    for src, dst in rules:
+        print(f"    {src:24s} -> {dst}")
 
     if not rules:
         print(

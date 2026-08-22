@@ -1,5 +1,6 @@
 pub mod decode;
 pub mod mic;
+pub mod preview;
 pub mod ptt;
 pub mod resample;
 
