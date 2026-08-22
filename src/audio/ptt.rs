@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use crate::asr::AsrEngine;
 use crate::audio::mic::{is_meaningful_pub, set_clipboard_pub};
+use crate::audio::preview::LivePreview;
 use crate::audio::resample::to_mono_16k;
 use crate::llm;
 use crate::osd::OsdHandle;
@@ -136,8 +137,11 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
     // ── 主循环 ────────────────────────────────────────────────────────────────
     // 麦克风句柄按需持有：按下 PTT 才创建输入流，松开立即 drop。
     // 空闲时进程不占用录音设备，Windows 也不会显示"正在使用麦克风"。
-    let mut engine: Option<AsrEngine> = None;
+    let mut engine: Option<Arc<AsrEngine>> = None;
     let mut stream: Option<cpal::Stream> = None;
+    // Runs the recogniser over the audio so far while the key is still held, so the overlay can
+    // show the transcript building up. Retired the moment the key is released.
+    let mut preview: Option<LivePreview> = None;
     let mut speech_buf: Vec<f32> = Vec::new();
     // 开麦失败后等触发键松开再重试，否则会在按住期间每 10ms 重试一次。
     let mut blocked_until_release = false;
@@ -156,7 +160,7 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
                 match AsrEngine::new(&asr_config, Some(&hr_config)) {
                     Ok(loaded) => {
                         tracing::info!("ASR model ready");
-                        engine = Some(loaded);
+                        engine = Some(Arc::new(loaded));
                         runtime.set_status(EngineStatus::Ready);
                     }
                     Err(error) => {
@@ -186,6 +190,18 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
                             Some(ref osd) => {
                                 osd.set_level(0.0);
                                 osd.set_recording();
+                                preview = tunables
+                                    .live_preview
+                                    .then(|| engine.clone())
+                                    .flatten()
+                                    .and_then(|engine| {
+                                        LivePreview::start(
+                                            engine,
+                                            osd.clone(),
+                                            sample_rate,
+                                            channels as u16,
+                                        )
+                                    });
                             }
                             None => eprint!("\r🔴 录音中...                    "),
                         }
@@ -207,6 +223,9 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
                         let energy = rms_energy(&chunk, channels);
                         osd.set_level(normalize_osd_level(energy, tunables.energy_threshold));
                     }
+                    if let Some(ref preview) = preview {
+                        preview.push(&chunk);
+                    }
                     speech_buf.extend_from_slice(&chunk);
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -219,6 +238,9 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
         if let Some(opened) = stream.take() {
             drop(opened);
             tracing::info!("麦克风已关闭");
+            // Retire the preview before the tail is collected: whatever it has already put on
+            // the overlay stays there until the real transcript replaces it.
+            preview = None;
             while let Ok(chunk) = audio_rx.try_recv() {
                 speech_buf.extend_from_slice(&chunk);
             }

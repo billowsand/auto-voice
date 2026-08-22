@@ -15,6 +15,12 @@ cargo test --all-targets --all-features --locked
 cargo build --release --locked
 ```
 
+听写浮层的外观取决于合成器如何混合窗口，光看代码判断不了。改动浮层时用下面的命令把它画在一张示意文档上，不需要麦克风和模型：
+
+```powershell
+cargo run -- osd-demo --phase listening   # waiting | listening | processing | done | notice
+```
+
 ## Pull Request
 
 - 每个 PR 聚焦一个主题，避免顺带重构无关代码。

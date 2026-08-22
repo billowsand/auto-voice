@@ -19,6 +19,10 @@ pub struct ConfigFile {
     /// Pop the overlay next to the text caret of the focused app instead of the screen edge.
     pub overlay_follow_caret: Option<bool>,
 
+    /// Show the transcript building up on the overlay while the hotkey is still held. Costs a
+    /// recogniser pass a couple of times a second on a background thread.
+    pub overlay_live_preview: Option<bool>,
+
     /// ASR 后端选择: "sense-voice"（默认）或 "funasr-nano"
     pub asr_backend: Option<String>,
 

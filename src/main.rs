@@ -5,6 +5,7 @@ mod diarization;
 mod llm;
 mod lmstudio;
 mod osd;
+mod osd_demo;
 mod output;
 mod platform;
 mod runtime;
@@ -138,6 +139,13 @@ enum Commands {
     },
     /// Show device and config info
     Info,
+    /// Preview the dictation overlay over a stand-in document (no microphone, no model)
+    #[command(hide = true)]
+    OsdDemo {
+        /// waiting | listening | processing | done | notice
+        #[arg(long, default_value = "listening")]
+        phase: osd_demo::DemoPhase,
+    },
 }
 
 // ── Resolved config (CLI > config.toml > hardcoded defaults) ────────────────
@@ -326,6 +334,7 @@ impl AppConfig {
                 lm_url: self.lm_url.clone(),
                 lm_model: self.lm_model.clone(),
                 follow_caret: file.overlay_follow_caret.unwrap_or(true),
+                live_preview: file.overlay_live_preview.unwrap_or(true),
             },
             self.build_asr_config(),
             self.build_hr_config(),
@@ -441,6 +450,9 @@ async fn main() -> Result<()> {
                 };
                 tokio::task::block_in_place(|| audio::mic::run_live(&live_cfg, &engine))?;
             }
+        }
+        Some(Commands::OsdDemo { phase }) => {
+            tokio::task::block_in_place(|| osd_demo::run(phase))?;
         }
         Some(Commands::Info) => {
             audio::print_devices()?;

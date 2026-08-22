@@ -54,6 +54,19 @@ press/release events into the existing PTT state machine.
 - Root viewport: settings center. Hidden at startup; closing it hides it instead of exiting.
 - OSD viewport: transparent, undecorated, mouse-pass-through and excluded from the taskbar.
   It is only visible while recording, processing, or briefly showing completion.
+
+  Transparency is per-pixel, so the card can have antialiased corners, a translucent surface
+  and a soft shadow. Windows needs four things arranged by `platform::prepare_overlay_window`,
+  because none of them come for free from winit: blur-behind over an empty region so DWM
+  blends the alpha channel; `WS_EX_LAYERED` cleared, since a layered window composites from a
+  colour key instead; `WS_CAPTION | WS_BORDER` cleared, or DWM frames the invisible canvas with
+  a shadow; and a `WM_NCHITTEST` answer of `HTTRANSPARENT`, because `WS_EX_TRANSPARENT` only
+  takes a window out of hit-testing while it is layered. `AUTO_VOICE_OVERLAY=colorkey` falls
+  back to 1-bit transparency for a driver that refuses to composite the alpha channel.
+
+  `cargo run -- osd-demo --phase listening|waiting|processing|done|notice` paints the overlay
+  over a stand-in document without a microphone or a model, which is the only way to review
+  the compositing.
 - Tray menu: opens settings and exits the process. Events wake the egui event loop instead
   of being polled at 60 Hz.
 

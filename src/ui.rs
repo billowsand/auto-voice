@@ -473,6 +473,17 @@ impl DesktopApp {
                 self.settings.overlay_follow_caret = Some(follow);
                 changed = true;
             }
+            ui.add_space(2.0);
+            let mut preview = self.settings.overlay_live_preview.unwrap_or(true);
+            if toggle_row(
+                ui,
+                &mut preview,
+                "边说边显示转写",
+                "说话时就把已识别的文字显示在浮层上，松开后再交给 AI 整理",
+            ) {
+                self.settings.overlay_live_preview = Some(preview);
+                changed = true;
+            }
             ui.add_space(6.0);
             hint(
                 ui,
@@ -802,9 +813,10 @@ pub fn native_options(show_window: bool) -> eframe::NativeOptions {
         .with_visible(show_window);
 
     // The GL config is chosen once, from the root viewport, and the overlay needs an alpha
-    // channel to composite. Windows is the exception: the WGL configs there advertise no
-    // composition support, so asking for it can leave glutin with no usable config at all —
-    // the overlay punches out its own background with a color key instead.
+    // channel to composite. Windows is the exception: `transparent` maps to WGL's legacy
+    // `TRANSPARENT_ARB` pixel formats, which no driver advertises, so asking for it can leave
+    // glutin with no usable config at all. The alpha channel is there either way — glutin asks
+    // for 8 bits by default — and `platform::prepare_overlay_window` gets DWM to blend it.
     #[cfg(not(target_os = "windows"))]
     let viewport = viewport.with_transparent(true);
 

@@ -103,8 +103,11 @@ pub fn capabilities() -> Capabilities {
 /// When the focused app exposes a Win32 caret the overlay sits right under the insertion point,
 /// the way a system IME candidate window does. Apps that draw their own caret (Chromium,
 /// Electron, most editors) expose nothing, so we fall back to the bottom of their window.
+///
+/// `card_inset` is the gap between the window's corner and the visible card inside it, so the
+/// card rather than the transparent canvas is what gets aligned with the caret.
 #[cfg(target_os = "windows")]
-pub fn overlay_origin(size: Vec2, follow_caret: bool) -> Option<Pos2> {
+pub fn overlay_origin(size: Vec2, card_inset: Vec2, follow_caret: bool) -> Option<Pos2> {
     use windows_sys::Win32::Foundation::{POINT, RECT};
     use windows_sys::Win32::Graphics::Gdi::{
         ClientToScreen, GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO,
@@ -153,7 +156,10 @@ pub fn overlay_origin(size: Vec2, follow_caret: bool) -> Option<Pos2> {
 
     let (x, y) = match caret {
         // Slightly left of and below the insertion point, like an IME candidate bar.
-        Some(point) => (point.x as f32 - 18.0, point.y as f32 + 14.0),
+        Some(point) => (
+            point.x as f32 - 18.0 - card_inset.x,
+            point.y as f32 + 14.0 - card_inset.y,
+        ),
         None => {
             let mut rect: RECT = unsafe { std::mem::zeroed() };
             let window = (!foreground.is_null()
@@ -180,44 +186,258 @@ pub fn overlay_origin(size: Vec2, follow_caret: bool) -> Option<Pos2> {
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn overlay_origin(_size: Vec2, _follow_caret: bool) -> Option<Pos2> {
+pub fn overlay_origin(_size: Vec2, _card_inset: Vec2, _follow_caret: bool) -> Option<Pos2> {
     // X11/Wayland/macOS caret probing needs AT-SPI / Accessibility permissions; the overlay
     // falls back to a fixed spot above the taskbar until those backends land.
     None
 }
 
-/// Make pure-black pixels of the overlay window transparent and click-through.
-///
-/// The GL configs glutin picks on Windows report no composition support, so the overlay's
-/// alpha channel is ignored and its canvas composites as an opaque black rectangle. Color-key
-/// layering is the reliable way out: the overlay clears to pure black, the pill never is, so
-/// only the pill remains on screen.
-#[cfg(target_os = "windows")]
-pub fn punch_out_overlay_background(window_title: &str) -> bool {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, GetWindowLongPtrW, SetLayeredWindowAttributes, SetWindowLongPtrW, GWL_EXSTYLE,
-        LWA_COLORKEY, WS_EX_LAYERED,
-    };
+/// How the compositor is told which parts of the overlay window are see-through.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OverlayCompositing {
+    /// The alpha channel is blended per pixel. Antialiased edges and real translucency both
+    /// work, so the overlay can be drawn like any other rounded, layered surface.
+    PerPixelAlpha,
+    /// One colour is punched out wholesale. Transparency is 1-bit: every antialiased edge pixel
+    /// is either fully opaque or gone, which is why rounded corners come out ragged.
+    ColorKey,
+}
 
-    let title: Vec<u16> = window_title
-        .encode_utf16()
-        .chain(std::iter::once(0))
-        .collect();
-    let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
-    if window.is_null() {
-        return false;
-    }
-    unsafe {
-        let style = GetWindowLongPtrW(window, GWL_EXSTYLE);
-        SetWindowLongPtrW(window, GWL_EXSTYLE, style | WS_EX_LAYERED as isize);
-        SetLayeredWindowAttributes(window, 0x0000_0000, 0, LWA_COLORKEY) != 0
+impl OverlayCompositing {
+    /// True when the overlay may rely on partial alpha — translucent fills, soft shadows,
+    /// feathered edges. Under a colour key all of those turn into hard black fringes.
+    pub fn blends(self) -> bool {
+        self == Self::PerPixelAlpha
     }
 }
 
+/// Set the overlay window up so its transparent pixels really are transparent.
+///
+/// Returns `None` while the native window does not exist yet, so the caller can retry on the
+/// next frame; the window is only created once the viewport has been shown for the first time.
+///
+/// DWM blends a window's alpha channel per pixel once blur-behind is enabled with an empty
+/// region — the standard recipe for a transparent OpenGL window on Windows, and what gives the
+/// overlay smooth corners. `AUTO_VOICE_OVERLAY=colorkey` falls back to the old 1-bit colour key
+/// for the rare driver that composites the alpha channel as opaque black.
+#[cfg(target_os = "windows")]
+pub fn prepare_overlay_window(window_title: &str) -> Option<OverlayCompositing> {
+    use windows_sys::Win32::Graphics::Dwm::{
+        DwmEnableBlurBehindWindow, DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE,
+        DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND, DWM_BB_BLURREGION, DWM_BB_ENABLE,
+        DWM_BLURBEHIND,
+    };
+    use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, DeleteObject, SetWindowRgn};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, GetWindowRect, SetLayeredWindowAttributes, SetWindowLongPtrW,
+        SetWindowPos, GWL_EXSTYLE, GWL_STYLE, LWA_COLORKEY, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+        SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_BORDER, WS_CAPTION, WS_EX_LAYERED,
+        WS_EX_WINDOWEDGE,
+    };
+
+    let window = find_own_window(window_title)?;
+
+    if overlay_mode_override().as_deref() == Some("colorkey") {
+        unsafe {
+            let style = GetWindowLongPtrW(window, GWL_EXSTYLE);
+            SetWindowLongPtrW(window, GWL_EXSTYLE, style | WS_EX_LAYERED as isize);
+            SetLayeredWindowAttributes(window, 0x0000_0000, 0, LWA_COLORKEY);
+        }
+        return Some(OverlayCompositing::ColorKey);
+    }
+
+    // winit marks the window `WS_EX_LAYERED` to make it click-through, and a layered window is
+    // composited from its colour key / constant alpha rather than from the alpha channel. The
+    // click-through itself comes from `WS_EX_TRANSPARENT`, which is left in place.
+    unsafe {
+        let style = GetWindowLongPtrW(window, GWL_EXSTYLE);
+        if style & WS_EX_LAYERED as isize != 0 {
+            SetWindowLongPtrW(window, GWL_EXSTYLE, style & !(WS_EX_LAYERED as isize));
+        }
+
+        // Blur-behind over an empty region is the standard way to ask DWM to blend a window's
+        // alpha channel per pixel. Nothing is actually blurred; the region is empty.
+        let region = CreateRectRgn(0, 0, -1, -1);
+        let blur = DWM_BLURBEHIND {
+            dwFlags: DWM_BB_ENABLE | DWM_BB_BLURREGION,
+            fEnable: 1,
+            hRgnBlur: region,
+            fTransitionOnMaximized: 0,
+        };
+        let result = DwmEnableBlurBehindWindow(window, &blur);
+        DeleteObject(region);
+        if result < 0 {
+            tracing::warn!("DwmEnableBlurBehindWindow failed (0x{result:08X}); using colour key");
+            let style = GetWindowLongPtrW(window, GWL_EXSTYLE);
+            SetWindowLongPtrW(window, GWL_EXSTYLE, style | WS_EX_LAYERED as isize);
+            SetLayeredWindowAttributes(window, 0x0000_0000, 0, LWA_COLORKEY);
+            return Some(OverlayCompositing::ColorKey);
+        }
+
+        // winit keeps `WS_CAPTION | WS_BORDER` on every window — undecorated ones included, so
+        // that aero snap keeps working — and DWM draws a frame and a drop shadow around any
+        // window that has them. Around a transparent canvas that reads as a ghost rectangle
+        // hanging in mid-air. A layered window never got either, which is why the colour-key
+        // build looked clean; without the layer they have to be taken off explicitly.
+        let style = GetWindowLongPtrW(window, GWL_STYLE);
+        SetWindowLongPtrW(
+            window,
+            GWL_STYLE,
+            style & !((WS_CAPTION | WS_BORDER) as isize),
+        );
+        let style_ex = GetWindowLongPtrW(window, GWL_EXSTYLE);
+        SetWindowLongPtrW(window, GWL_EXSTYLE, style_ex & !(WS_EX_WINDOWEDGE as isize));
+
+        let corners = DWMWCP_DONOTROUND;
+        DwmSetWindowAttribute(
+            window,
+            DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+            std::ptr::addr_of!(corners).cast(),
+            size_of_val(&corners) as u32,
+        );
+        // Windows 11 only; older builds simply reject it.
+        let border = DWMWA_COLOR_NONE;
+        DwmSetWindowAttribute(
+            window,
+            DWMWA_BORDER_COLOR as u32,
+            std::ptr::addr_of!(border).cast(),
+            size_of_val(&border) as u32,
+        );
+
+        SetWindowPos(
+            window,
+            std::ptr::null_mut(),
+            0,
+            0,
+            0,
+            0,
+            SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER,
+        );
+
+        // Windows still runs a hairline along the top of a borderless window. Nothing is drawn
+        // in the outermost pixel of the canvas, so clipping it away costs nothing and takes the
+        // line with it.
+        let mut rect: windows_sys::Win32::Foundation::RECT = std::mem::zeroed();
+        if GetWindowRect(window, &mut rect) != 0 {
+            let region =
+                CreateRectRgn(1, 1, rect.right - rect.left - 1, rect.bottom - rect.top - 1);
+            // The window owns the region from here on; it must not be deleted.
+            SetWindowRgn(window, region, 1);
+        }
+
+        make_click_through(window);
+    }
+
+    Some(OverlayCompositing::PerPixelAlpha)
+}
+
+/// Let every mouse event fall through the overlay to the app underneath.
+///
+/// `WS_EX_TRANSPARENT` — which is how winit implements mouse passthrough — only takes windows
+/// out of hit-testing while they are also layered, and the layer is exactly what had to go for
+/// the alpha channel to be composited. Answering `WM_NCHITTEST` with `HTTRANSPARENT` is the
+/// same statement made directly, and it does not depend on how the window is composited.
+#[cfg(target_os = "windows")]
+fn make_click_through(window: windows_sys::Win32::Foundation::HWND) {
+    use std::sync::atomic::{AtomicIsize, Ordering};
+    use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CallWindowProcW, DefWindowProcW, GetWindowLongPtrW, SetWindowLongPtrW, GWLP_WNDPROC,
+        HTTRANSPARENT, MA_NOACTIVATE, WM_MOUSEACTIVATE, WM_NCHITTEST,
+    };
+
+    /// The window procedure winit installed, which handles everything except the two messages
+    /// below. There is only ever one overlay window.
+    static INNER: AtomicIsize = AtomicIsize::new(0);
+
+    unsafe extern "system" fn proc(
+        window: HWND,
+        message: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        match message {
+            WM_NCHITTEST => HTTRANSPARENT as LRESULT,
+            // Clicking the overlay must not pull focus away from the app being dictated into.
+            WM_MOUSEACTIVATE => MA_NOACTIVATE as LRESULT,
+            _ => match INNER.load(Ordering::Relaxed) {
+                0 => unsafe { DefWindowProcW(window, message, wparam, lparam) },
+                inner => unsafe {
+                    let inner: unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT =
+                        std::mem::transmute(inner);
+                    CallWindowProcW(Some(inner), window, message, wparam, lparam)
+                },
+            },
+        }
+    }
+
+    let installed =
+        proc as unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT as usize as isize;
+    unsafe {
+        let current = GetWindowLongPtrW(window, GWLP_WNDPROC);
+        if current == installed {
+            return;
+        }
+        INNER.store(current, Ordering::Relaxed);
+        SetWindowLongPtrW(window, GWLP_WNDPROC, installed);
+    }
+}
+
+/// Find this process's window with the given title.
+///
+/// `FindWindowW` searches every process, so with a second copy of auto-voice running — or the
+/// packaged build alongside a development one — it happily hands back the *other* instance's
+/// overlay and leaves ours uncomposited.
+#[cfg(target_os = "windows")]
+fn find_own_window(window_title: &str) -> Option<windows_sys::Win32::Foundation::HWND> {
+    use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowTextW, GetWindowThreadProcessId,
+    };
+
+    struct Search {
+        title: Vec<u16>,
+        process: u32,
+        found: HWND,
+    }
+
+    unsafe extern "system" fn visit(window: HWND, param: LPARAM) -> BOOL {
+        let search = unsafe { &mut *(param as *mut Search) };
+        let mut process = 0u32;
+        unsafe { GetWindowThreadProcessId(window, &mut process) };
+        if process != search.process {
+            return 1; // keep enumerating
+        }
+        let mut buffer = [0u16; 160];
+        let length =
+            unsafe { GetWindowTextW(window, buffer.as_mut_ptr(), buffer.len() as i32) } as usize;
+        if length > 0 && buffer[..length] == search.title[..] {
+            search.found = window;
+            return 0; // stop
+        }
+        1
+    }
+
+    let mut search = Search {
+        title: window_title.encode_utf16().collect(),
+        process: unsafe { GetCurrentProcessId() },
+        found: std::ptr::null_mut(),
+    };
+    unsafe { EnumWindows(Some(visit), &mut search as *mut Search as LPARAM) };
+    (!search.found.is_null()).then_some(search.found)
+}
+
 #[cfg(not(target_os = "windows"))]
-pub fn punch_out_overlay_background(_window_title: &str) -> bool {
+pub fn prepare_overlay_window(_window_title: &str) -> Option<OverlayCompositing> {
     // Wayland/X11/macOS composite the alpha channel of the GL surface directly.
-    true
+    Some(OverlayCompositing::PerPixelAlpha)
+}
+
+fn overlay_mode_override() -> Option<String> {
+    std::env::var("AUTO_VOICE_OVERLAY")
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
 }
 
 /// Fallback overlay origin, in physical pixels: horizontally centred, above the taskbar.

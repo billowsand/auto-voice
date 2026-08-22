@@ -19,6 +19,7 @@ pub struct LiveTunables {
     pub lm_url: String,
     pub lm_model: String,
     pub follow_caret: bool,
+    pub live_preview: bool,
 }
 
 /// What the ASR engine is doing, surfaced in the settings header and the overlay.
@@ -97,6 +98,7 @@ impl Runtime {
             lm_url: resolved.lm_url.clone(),
             lm_model: resolved.lm_model.clone(),
             follow_caret: file.overlay_follow_caret.unwrap_or(true),
+            live_preview: file.overlay_live_preview.unwrap_or(true),
         };
         if let Some(keys) = crate::config::parse_ptt_keys(&live.ptt_key) {
             *self.write(&self.inner.ptt_keys) = keys;
@@ -161,6 +163,7 @@ mod tests {
                 lm_url: "http://localhost:1234".into(),
                 lm_model: "local-model".into(),
                 follow_caret: true,
+                live_preview: true,
             },
             // Same values `AppConfig::from_file` derives from an empty config, so that only a
             // deliberate change in a test shows up as a reload.
