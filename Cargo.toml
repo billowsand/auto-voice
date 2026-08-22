@@ -35,6 +35,7 @@ serde       = { version = "1", features = ["derive"] }
 serde_json  = "1"
 toml        = "0.8"
 directories = "6"
+skrifa = "0.42.1"
 
 # 跨平台桌面 UI。Glow 比默认 WGPU 依赖更轻，适合常驻托盘应用。
 eframe = { version = "0.35", default-features = false, features = [

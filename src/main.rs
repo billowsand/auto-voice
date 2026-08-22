@@ -177,6 +177,7 @@ pub(crate) struct AppConfig {
     energy_threshold: f32,
     vad_silence_ms: u64,
     ptt_key: Option<String>,
+    input_device: Option<String>,
     hr_lexicon: Option<String>,
     hr_rule_fsts: Option<String>,
 }
@@ -250,6 +251,7 @@ impl AppConfig {
             energy_threshold: file.energy_threshold.unwrap_or(0.01),
             vad_silence_ms: file.vad_silence_ms.unwrap_or(800),
             ptt_key: file.ptt_key.clone(),
+            input_device: file.input_device.clone(),
             hr_lexicon: file.hr_lexicon.clone(),
             hr_rule_fsts: file.hr_rule_fsts.clone(),
         }
@@ -329,6 +331,7 @@ impl AppConfig {
                     .ptt_key
                     .clone()
                     .unwrap_or_else(|| "CapsLock".to_string()),
+                input_device: self.input_device.clone(),
                 energy_threshold: self.energy_threshold,
                 no_llm: self.no_llm,
                 lm_url: self.lm_url.clone(),
@@ -447,6 +450,7 @@ async fn main() -> Result<()> {
                     lm_url: app.lm_url.clone(),
                     lm_model: app.lm_model.clone(),
                     no_llm: app.no_llm,
+                    input_device: app.input_device.clone(),
                 };
                 tokio::task::block_in_place(|| audio::mic::run_live(&live_cfg, &engine))?;
             }
@@ -484,6 +488,10 @@ async fn main() -> Result<()> {
                     .unwrap_or_else(|| "default".to_string())
             );
             println!("  lang:   {}", app.lang);
+            println!(
+                "  input_device: {}",
+                app.input_device.as_deref().unwrap_or("system default")
+            );
         }
     }
 

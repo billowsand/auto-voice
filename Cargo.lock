@@ -503,6 +503,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sherpa-onnx",
+ "skrifa",
  "symphonia",
  "tokio",
  "toml 0.8.2",

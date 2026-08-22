@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, StreamTrait};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
@@ -24,6 +24,7 @@ enum VadState {
 pub struct LiveConfig {
     pub vad_silence_ms: u64,
     pub energy_threshold: f32,
+    pub input_device: Option<String>,
     pub output_path: Option<PathBuf>,
     pub lm_url: String,
     pub lm_model: String,
@@ -31,10 +32,8 @@ pub struct LiveConfig {
 }
 
 pub fn run_live(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
-    let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .ok_or_else(|| anyhow::anyhow!("No input device found"))?;
+    let selection = crate::audio::select_input_device(cfg.input_device.as_deref())?;
+    let device = selection.device;
 
     let stream_config = device.default_input_config()?;
     let sample_rate = stream_config.sample_rate().0;
@@ -42,7 +41,7 @@ pub fn run_live(cfg: &LiveConfig, asr: &AsrEngine) -> Result<()> {
 
     tracing::info!(
         "Mic: {} | {}Hz {}ch {:?}",
-        device.name()?,
+        selection.name,
         sample_rate,
         channels,
         stream_config.sample_format()

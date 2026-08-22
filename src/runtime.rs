@@ -14,6 +14,7 @@ use crate::config::ConfigFile;
 #[derive(Clone, Debug, PartialEq)]
 pub struct LiveTunables {
     pub ptt_key: String,
+    pub input_device: Option<String>,
     pub energy_threshold: f32,
     pub no_llm: bool,
     pub lm_url: String,
@@ -93,6 +94,7 @@ impl Runtime {
                 .ptt_key
                 .clone()
                 .unwrap_or_else(|| "CapsLock".into()),
+            input_device: resolved.input_device.clone(),
             energy_threshold: resolved.energy_threshold,
             no_llm: resolved.no_llm,
             lm_url: resolved.lm_url.clone(),
@@ -158,6 +160,7 @@ mod tests {
         Runtime::new(
             LiveTunables {
                 ptt_key: "CapsLock".into(),
+                input_device: None,
                 energy_threshold: 0.01,
                 no_llm: false,
                 lm_url: "http://localhost:1234".into(),
@@ -184,9 +187,14 @@ mod tests {
         let mut config = ConfigFile::default();
         config.energy_threshold = Some(0.05);
         config.ptt_key = Some("RightCtrl".to_owned());
+        config.input_device = Some("Studio microphone".to_owned());
         assert!(!runtime.apply(&config));
         assert!(runtime.pending_asr().is_none());
         assert_eq!(runtime.live().energy_threshold, 0.05);
+        assert_eq!(
+            runtime.live().input_device.as_deref(),
+            Some("Studio microphone")
+        );
         assert_eq!(runtime.ptt_keys(), vec![rdev::Key::ControlRight]);
     }
 

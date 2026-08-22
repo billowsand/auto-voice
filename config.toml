@@ -1,3 +1,6 @@
+# 可选：从系统字体中选择设置页与浮层字体，靠前的字体优先
+# ui_font_families = ["Microsoft YaHei", "Segoe UI"]
+
 asr_backend = "sense-voice"
 model = "models/sense-voice/model.int8.onnx"
 tokens = "models/sense-voice/tokens.txt"
@@ -13,5 +16,7 @@ lmstudio_context_length = 4096
 energy_threshold = 0.009999999776482582
 vad_silence_ms = 800
 ptt_key = "RightAlt"
+# 可选：指定麦克风名称；不填时跟随系统默认设备
+# input_device = "麦克风 (USB Audio Device)"
 hr_lexicon = "models/hr/lexicon.txt"
 hr_rule_fsts = "models/hr/replace.fst"

@@ -50,14 +50,16 @@ enum Section {
     Input,
     Model,
     Polish,
+    Appearance,
 }
 
 impl Section {
-    const ALL: [(Section, &'static str, &'static str); 4] = [
+    const ALL: [(Section, &'static str, &'static str); 5] = [
         (Section::Overview, "总览", "运行状态与用法"),
         (Section::Input, "说话方式", "快捷键与浮层"),
         (Section::Model, "识别模型", "后端、语言与路径"),
         (Section::Polish, "文本优化", "LLM 纠错"),
+        (Section::Appearance, "外观", "界面字体"),
     ];
 }
 
@@ -80,7 +82,12 @@ pub struct DesktopApp {
     /// The window is centred on the first frame; winit's default placement can hang off-screen.
     centred: bool,
     toast: Option<Toast>,
-    input_device: Option<String>,
+    input_devices: Vec<String>,
+    default_input_device: Option<String>,
+    ui_context: egui::Context,
+    system_fonts: Vec<platform::SystemFont>,
+    font_search: String,
+    applied_font_families: Option<Vec<String>>,
     _tray: tray_icon::TrayIcon,
 }
 
@@ -93,7 +100,12 @@ impl DesktopApp {
         tray: tray_icon::TrayIcon,
         actions: TrayActions,
     ) -> Self {
-        platform::install_system_fonts(&creation.egui_ctx);
+        let system_fonts = platform::list_system_fonts();
+        platform::install_ui_fonts(
+            &creation.egui_ctx,
+            settings.ui_font_families.as_deref(),
+            &system_fonts,
+        );
         install_theme(&creation.egui_ctx);
         osd.attach_context(&creation.egui_ctx);
 
@@ -132,6 +144,9 @@ impl DesktopApp {
         }));
 
         let wizard_step = (!settings.is_configured()).then_some(0);
+        let applied_font_families = settings.ui_font_families.clone();
+        let input_devices = crate::audio::input_device_names().unwrap_or_default();
+        let default_input_device = crate::audio::default_input_device_name();
 
         Self {
             osd,
@@ -144,7 +159,12 @@ impl DesktopApp {
             dirty_since: None,
             centred: false,
             toast: None,
-            input_device: default_input_device(),
+            input_devices,
+            default_input_device,
+            ui_context: creation.egui_ctx.clone(),
+            system_fonts,
+            font_search: String::new(),
+            applied_font_families,
             _tray: tray,
         }
     }
@@ -162,17 +182,36 @@ impl DesktopApp {
         match self.settings.save() {
             Ok(_) => {
                 let reloading = self.runtime.apply(&self.settings);
+                let font_report = (self.applied_font_families != self.settings.ui_font_families)
+                    .then(|| {
+                        self.applied_font_families = self.settings.ui_font_families.clone();
+                        platform::install_ui_fonts(
+                            &self.ui_context,
+                            self.settings.ui_font_families.as_deref(),
+                            &self.system_fonts,
+                        )
+                    });
                 let live = self.runtime.live();
                 self.osd
                     .set_hotkey_label(config::describe_ptt_key(&live.ptt_key));
                 self.osd.set_follow_caret(live.follow_caret);
+                let font_error = font_report
+                    .as_ref()
+                    .is_some_and(|report| !report.errors.is_empty());
                 self.toast = Some(Toast {
-                    message: if reloading {
+                    message: if font_error {
+                        let font_report = font_report.as_ref().expect("font report was checked");
+                        format!(
+                            "已保存 · 已加载 {} 个字体，{} 个字体不可用",
+                            font_report.loaded,
+                            font_report.errors.len()
+                        )
+                    } else if reloading {
                         "已保存 · 正在重新加载模型".to_owned()
                     } else {
                         "已保存 · 立即生效".to_owned()
                     },
-                    error: false,
+                    error: font_error,
                     at: Instant::now(),
                 });
             }
@@ -257,7 +296,8 @@ impl DesktopApp {
             );
         });
         ui.add_space(12.0);
-        capability_card(ui, &self.capabilities, self.input_device.as_deref());
+        let input_device = self.effective_input_device_name();
+        capability_card(ui, &self.capabilities, input_device.as_deref());
     }
 
     fn wizard_hotkey(&mut self, ui: &mut egui::Ui) {
@@ -355,6 +395,7 @@ impl DesktopApp {
                         Section::Input => self.input_section(ui),
                         Section::Model => self.model_section(ui),
                         Section::Polish => self.polish_section(ui),
+                        Section::Appearance => self.appearance_section(ui),
                     });
             });
     }
@@ -441,7 +482,8 @@ impl DesktopApp {
             },
         );
         ui.add_space(12.0);
-        capability_card(ui, &self.capabilities, self.input_device.as_deref());
+        let input_device = self.effective_input_device_name();
+        capability_card(ui, &self.capabilities, input_device.as_deref());
         ui.add_space(12.0);
         card(
             ui,
@@ -454,6 +496,75 @@ impl DesktopApp {
 
     fn input_section(&mut self, ui: &mut egui::Ui) {
         let mut changed = false;
+        let mut refresh_devices = false;
+        card(
+            ui,
+            Some(("麦克风", "选择按住说话时使用的输入设备")),
+            |ui| {
+                let previous = self.settings.input_device.clone();
+                let mut selected = previous.clone();
+                let default_label = self
+                    .default_input_device
+                    .as_deref()
+                    .map(|name| format!("系统默认 · {name}"))
+                    .unwrap_or_else(|| "系统默认".to_owned());
+                let selected_label = selected.clone().unwrap_or_else(|| default_label.clone());
+
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_salt("input-device-picker")
+                        .width((ui.available_width() - 96.0).max(220.0))
+                        .selected_text(selected_label)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut selected, None, &default_label);
+                            for name in &self.input_devices {
+                                let label = if self.default_input_device.as_deref() == Some(name) {
+                                    format!("{name} · 系统默认")
+                                } else {
+                                    name.clone()
+                                };
+                                ui.selectable_value(&mut selected, Some(name.clone()), label);
+                            }
+                            if let Some(missing) = previous.as_ref().filter(|name| {
+                                !self.input_devices.iter().any(|device| device == *name)
+                            }) {
+                                ui.selectable_value(
+                                    &mut selected,
+                                    Some(missing.clone()),
+                                    format!("{missing} · 当前不可用"),
+                                );
+                            }
+                        });
+                    if ui.small_button("重新扫描").clicked() {
+                        refresh_devices = true;
+                    }
+                });
+
+                if let Some(name) = selected
+                    .as_ref()
+                    .filter(|name| !self.input_devices.iter().any(|device| device == *name))
+                {
+                    status_line(
+                        ui,
+                        WARN,
+                        &format!("{name} 当前不可用，录音时会自动回退到系统默认麦克风"),
+                    );
+                } else {
+                    hint(
+                        ui,
+                        "切换将在下一次按住快捷键时生效，不会打断正在进行的录音。",
+                    );
+                }
+
+                if selected != previous {
+                    self.settings.input_device = selected;
+                    changed = true;
+                }
+            },
+        );
+        if refresh_devices {
+            self.refresh_input_devices();
+        }
+        ui.add_space(12.0);
         card(
             ui,
             Some(("按住说话快捷键", "按住时录音，松开后插入文字")),
@@ -514,6 +625,20 @@ impl DesktopApp {
         if changed {
             self.touched();
         }
+    }
+
+    fn refresh_input_devices(&mut self) {
+        self.input_devices = crate::audio::input_device_names().unwrap_or_default();
+        self.default_input_device = crate::audio::default_input_device_name();
+    }
+
+    fn effective_input_device_name(&self) -> Option<String> {
+        self.settings
+            .input_device
+            .as_ref()
+            .filter(|selected| self.input_devices.iter().any(|device| device == *selected))
+            .cloned()
+            .or_else(|| self.default_input_device.clone())
     }
 
     fn hotkey_picker(&mut self, ui: &mut egui::Ui) -> bool {
@@ -687,6 +812,186 @@ impl DesktopApp {
         }
     }
 
+    fn appearance_section(&mut self, ui: &mut egui::Ui) {
+        let mut changed = false;
+        let mut remove = None;
+        let mut move_font = None;
+        let mut restore_defaults = false;
+        let mut add_family = None;
+
+        card(
+            ui,
+            Some(("已选字体", "靠前的字体优先，缺少的字形由后续字体补全")),
+            |ui| {
+                let families = self.settings.ui_font_families.get_or_insert_with(Vec::new);
+                if families.is_empty() {
+                    hint(
+                        ui,
+                        "当前使用系统默认字体。从下方系统字体列表中点击即可添加。",
+                    );
+                } else {
+                    for (index, family) in families.iter().enumerate() {
+                        let installed = self
+                            .system_fonts
+                            .iter()
+                            .any(|font| font.family.eq_ignore_ascii_case(family));
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(format!("{}", index + 1))
+                                    .size(11.5)
+                                    .color(MUTED),
+                            );
+                            ui.label(
+                                RichText::new(if installed {
+                                    family.clone()
+                                } else {
+                                    format!("{family}（未安装）")
+                                })
+                                .size(13.0)
+                                .color(if installed {
+                                    TEXT
+                                } else {
+                                    WARN
+                                }),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui.small_button("移除").clicked() {
+                                        remove = Some(index);
+                                    }
+                                    if index + 1 < families.len() && ui.small_button("↓").clicked()
+                                    {
+                                        move_font = Some((index, index + 1));
+                                    }
+                                    if index > 0 && ui.small_button("↑").clicked() {
+                                        move_font = Some((index, index - 1));
+                                    }
+                                },
+                            );
+                        });
+                        if index + 1 < families.len() {
+                            ui.separator();
+                        }
+                    }
+                }
+
+                if !families.is_empty() {
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        if ghost_button(ui, "恢复默认").clicked() {
+                            restore_defaults = true;
+                        }
+                    });
+                }
+            },
+        );
+
+        ui.add_space(12.0);
+        let selected = self.settings.ui_font_families.clone().unwrap_or_default();
+        card(
+            ui,
+            Some(("系统字体", "搜索并点击字体名称即可添加")),
+            |ui| {
+                ui.add_sized(
+                    [ui.available_width(), 32.0],
+                    egui::TextEdit::singleline(&mut self.font_search).hint_text("搜索系统字体…"),
+                );
+                ui.add_space(6.0);
+                ui.label(
+                    RichText::new(format!("已检测到 {} 种字体", self.system_fonts.len()))
+                        .size(10.5)
+                        .color(MUTED),
+                );
+                ui.add_space(4.0);
+
+                let query = self.font_search.trim().to_lowercase();
+                let matches = self
+                    .system_fonts
+                    .iter()
+                    .filter(|font| query.is_empty() || font.family.to_lowercase().contains(&query))
+                    .collect::<Vec<_>>();
+                if matches.is_empty() {
+                    hint(ui, "没有找到匹配的系统字体。");
+                    return;
+                }
+
+                egui::ScrollArea::vertical()
+                    .id_salt("system-font-list")
+                    .max_height(250.0)
+                    .auto_shrink([false, true])
+                    .show_rows(ui, 34.0, matches.len(), |ui, range| {
+                        for font in &matches[range] {
+                            let already_selected = selected
+                                .iter()
+                                .any(|family| family.eq_ignore_ascii_case(&font.family));
+                            let label = if already_selected {
+                                format!("✓  {}", font.family)
+                            } else {
+                                font.family.clone()
+                            };
+                            if ui
+                                .add_enabled(
+                                    !already_selected,
+                                    egui::Button::new(
+                                        RichText::new(label)
+                                            .size(12.5)
+                                            .color(if already_selected { OK } else { TEXT }),
+                                    )
+                                    .frame(false)
+                                    .min_size(Vec2::new(ui.available_width(), 30.0)),
+                                )
+                                .clicked()
+                            {
+                                add_family = Some(font.family.clone());
+                            }
+                        }
+                    });
+            },
+        );
+
+        if let Some(index) = remove {
+            if let Some(families) = self.settings.ui_font_families.as_mut() {
+                families.remove(index);
+            }
+            changed = true;
+        }
+        if let Some((from, to)) = move_font {
+            if let Some(families) = self.settings.ui_font_families.as_mut() {
+                families.swap(from, to);
+            }
+            changed = true;
+        }
+        if let Some(family) = add_family {
+            self.settings
+                .ui_font_families
+                .get_or_insert_with(Vec::new)
+                .push(family);
+            changed = true;
+        }
+        if restore_defaults {
+            self.settings.ui_font_families = None;
+            changed = true;
+        }
+        if self
+            .settings
+            .ui_font_families
+            .as_ref()
+            .is_some_and(Vec::is_empty)
+        {
+            self.settings.ui_font_families = None;
+        }
+
+        ui.add_space(12.0);
+        hint(
+            ui,
+            "选择后会自动保存并立即替换设置页与浮层字体，无需重启程序。",
+        );
+        if changed {
+            self.touched();
+        }
+    }
+
     fn toast_ui(&mut self, ui: &mut egui::Ui) {
         let Some(toast) = &self.toast else { return };
         let age = toast.at.elapsed();
@@ -841,13 +1146,6 @@ fn install_theme(ctx: &egui::Context) {
     style.visuals.widgets.hovered.corner_radius = CornerRadius::same(8);
     style.visuals.widgets.active.corner_radius = CornerRadius::same(8);
     ctx.set_style_of(egui::Theme::Dark, style);
-}
-
-fn default_input_device() -> Option<String> {
-    use cpal::traits::{DeviceTrait, HostTrait};
-    cpal::default_host()
-        .default_input_device()
-        .and_then(|device| device.name().ok())
 }
 
 // ── Reusable pieces ──────────────────────────────────────────────────────────

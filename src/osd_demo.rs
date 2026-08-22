@@ -68,7 +68,8 @@ pub fn run(phase: DemoPhase) -> anyhow::Result<()> {
             ..Default::default()
         },
         Box::new(move |creation| {
-            crate::platform::install_system_fonts(&creation.egui_ctx);
+            let system_fonts = crate::platform::list_system_fonts();
+            crate::platform::install_ui_fonts(&creation.egui_ctx, None, &system_fonts);
             osd.attach_context(&creation.egui_ctx);
             std::thread::spawn({
                 let osd = osd.clone();

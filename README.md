@@ -112,6 +112,8 @@ lang = "auto"
 
 # 支持单键或组合键，例如 LeftCtrl+LeftAlt
 ptt_key = "RightAlt"
+# 可选：指定麦克风名称；也可以直接在设置页选择
+# input_device = "麦克风 (USB Audio Device)"
 
 # 首次运行引导完成后由程序写入；删掉它可以重新走一遍引导
 setup_done = true
@@ -119,6 +121,9 @@ setup_done = true
 overlay_follow_caret = true
 # 说话过程中就在浮层上显示已识别的文字。关掉可以省下后台的识别开销
 overlay_live_preview = true
+
+# 可选：从系统字体中选择设置页与浮层字体，靠前的字体优先
+ui_font_families = ["Microsoft YaHei", "Segoe UI"]
 
 # LM Studio 纠错；无需纠错时设置为 true
 lm_url = "http://localhost:1234"

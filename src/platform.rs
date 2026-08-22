@@ -465,38 +465,254 @@ pub fn is_wayland_session() -> bool {
             .is_ok_and(|value| value.eq_ignore_ascii_case("wayland"))
 }
 
-/// Add a system CJK font as a fallback without redistributing an OS font.
-pub fn install_system_fonts(ctx: &eframe::egui::Context) {
-    let Some(path) = system_cjk_font_candidates()
+#[derive(Debug, Default)]
+pub struct FontLoadReport {
+    pub loaded: usize,
+    pub errors: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SystemFont {
+    pub family: String,
+    path: PathBuf,
+    face_index: u32,
+}
+
+/// Discover installed TrueType/OpenType families. Collections are expanded and the regular face
+/// is preferred when a family has several styles.
+pub fn list_system_fonts() -> Vec<SystemFont> {
+    use std::collections::BTreeMap;
+
+    use skrifa::{raw::FileRef, string::StringId, MetadataProvider};
+
+    let mut families: BTreeMap<String, (SystemFont, u8)> = BTreeMap::new();
+    for path in system_font_files() {
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        let Ok(file) = FileRef::new(&bytes) else {
+            continue;
+        };
+        for font in file.fonts().flatten() {
+            let family = font
+                .localized_strings(StringId::TYPOGRAPHIC_FAMILY_NAME)
+                .english_or_first()
+                .or_else(|| {
+                    font.localized_strings(StringId::FAMILY_NAME)
+                        .english_or_first()
+                })
+                .map(|name| name.to_string())
+                .filter(|name| !name.trim().is_empty());
+            let Some(family) = family else { continue };
+            let style = font
+                .localized_strings(StringId::TYPOGRAPHIC_SUBFAMILY_NAME)
+                .english_or_first()
+                .or_else(|| {
+                    font.localized_strings(StringId::SUBFAMILY_NAME)
+                        .english_or_first()
+                })
+                .map(|name| name.to_string())
+                .unwrap_or_default();
+            let rank = regular_style_rank(&style);
+            let key = family.to_lowercase();
+            let candidate = SystemFont {
+                family,
+                path: path.clone(),
+                face_index: font.ttc_index().unwrap_or(0),
+            };
+            match families.entry(key) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert((candidate, rank));
+                }
+                std::collections::btree_map::Entry::Occupied(mut entry) if rank < entry.get().1 => {
+                    entry.insert((candidate, rank));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let fonts = families
+        .into_values()
+        .map(|(font, _)| font)
+        .collect::<Vec<_>>();
+    tracing::info!("Discovered {} system font families", fonts.len());
+    fonts
+}
+
+/// Replace the UI's primary fonts with the selected system families, then retain the bundled egui
+/// fonts and a system CJK font as fallbacks. An empty selection restores the defaults.
+pub fn install_ui_fonts(
+    ctx: &eframe::egui::Context,
+    selected_families: Option<&[String]>,
+    system_fonts: &[SystemFont],
+) -> FontLoadReport {
+    use eframe::egui::{FontData, FontDefinitions, FontFamily};
+
+    let mut fonts = FontDefinitions::default();
+    let mut custom_names = Vec::new();
+    let mut report = FontLoadReport::default();
+
+    for (index, family) in selected_families.unwrap_or_default().iter().enumerate() {
+        let family = family.trim();
+        if family.is_empty() {
+            continue;
+        }
+        let Some(source) = system_fonts
+            .iter()
+            .find(|font| font.family.eq_ignore_ascii_case(family))
+        else {
+            report.errors.push(format!("{family}：系统中未找到该字体"));
+            continue;
+        };
+        match std::fs::read(&source.path) {
+            Ok(bytes) => {
+                let name = format!("auto_voice_custom_{index}");
+                let mut data = FontData::from_owned(bytes);
+                data.index = source.face_index;
+                fonts.font_data.insert(name.clone(), data.into());
+                custom_names.push(name);
+                report.loaded += 1;
+                tracing::info!(
+                    "Loaded system UI font {} from {} (face {})",
+                    family,
+                    source.path.display(),
+                    source.face_index
+                );
+            }
+            Err(error) => {
+                report.errors.push(format!("{family}：{error}"));
+                tracing::warn!(
+                    "Failed to read system UI font {} from {}: {error}",
+                    family,
+                    source.path.display()
+                );
+            }
+        }
+    }
+
+    let system_fallback = system_cjk_font_candidates()
         .into_iter()
         .find(|path| path.is_file())
-    else {
-        tracing::warn!("No system CJK font found; Chinese UI glyphs may be unavailable");
-        return;
-    };
-
-    match std::fs::read(&path) {
-        Ok(bytes) => {
-            let mut fonts = eframe::egui::FontDefinitions::default();
-            fonts.font_data.insert(
-                "auto_voice_cjk".to_owned(),
-                eframe::egui::FontData::from_owned(bytes).into(),
-            );
-            for family in [
-                eframe::egui::FontFamily::Proportional,
-                eframe::egui::FontFamily::Monospace,
-            ] {
+        .and_then(|path| match std::fs::read(&path) {
+            Ok(bytes) => {
+                let name = "auto_voice_cjk".to_owned();
                 fonts
-                    .families
-                    .entry(family)
-                    .or_default()
-                    .push("auto_voice_cjk".to_owned());
+                    .font_data
+                    .insert(name.clone(), FontData::from_owned(bytes).into());
+                tracing::info!("Loaded UI font fallback from {}", path.display());
+                Some(name)
             }
-            ctx.set_fonts(fonts);
-            tracing::info!("Loaded UI font fallback from {}", path.display());
+            Err(error) => {
+                tracing::warn!("Failed to read UI font {}: {error}", path.display());
+                None
+            }
+        });
+
+    for family in [FontFamily::Proportional, FontFamily::Monospace] {
+        let family_fonts = fonts.families.entry(family).or_default();
+        for name in custom_names.iter().rev() {
+            family_fonts.insert(0, name.clone());
         }
-        Err(error) => tracing::warn!("Failed to read UI font {}: {error}", path.display()),
+        if let Some(name) = &system_fallback {
+            family_fonts.push(name.clone());
+        }
     }
+    if system_fallback.is_none() {
+        tracing::warn!("No system CJK font found; Chinese UI glyphs may be unavailable");
+    }
+
+    ctx.set_fonts(fonts);
+    report
+}
+
+fn regular_style_rank(style: &str) -> u8 {
+    let style = style.trim().to_lowercase();
+    if matches!(style.as_str(), "regular" | "normal" | "book" | "roman") {
+        0
+    } else if style.contains("regular") || style.contains("normal") {
+        1
+    } else {
+        2
+    }
+}
+
+fn is_supported_font_path(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "ttf" | "otf" | "ttc" | "otc"
+            )
+        })
+}
+
+fn system_font_files() -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    let mut pending = system_font_directories();
+    while let Some(directory) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(directory) else {
+            continue;
+        };
+        let mut entries = entries.flatten().collect::<Vec<_>>();
+        entries.sort_by_key(std::fs::DirEntry::file_name);
+        for entry in entries {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+            if file_type.is_dir() {
+                pending.push(path);
+            } else if file_type.is_file() && is_supported_font_path(&path) {
+                files.push(path);
+            }
+        }
+    }
+    files
+}
+
+fn system_font_directories() -> Vec<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        let windows_dir = std::env::var_os("WINDIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
+        let mut directories = vec![windows_dir.join("Fonts")];
+        if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
+            directories.push(PathBuf::from(local_app_data).join(r"Microsoft\Windows\Fonts"));
+        }
+        return directories;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let mut directories = vec![
+            PathBuf::from("/System/Library/Fonts"),
+            PathBuf::from("/Library/Fonts"),
+        ];
+        if let Some(home) = std::env::var_os("HOME") {
+            directories.push(PathBuf::from(home).join("Library/Fonts"));
+        }
+        return directories;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let mut directories = vec![
+            PathBuf::from("/usr/share/fonts"),
+            PathBuf::from("/usr/local/share/fonts"),
+        ];
+        if let Some(home) = std::env::var_os("HOME") {
+            let home = PathBuf::from(home);
+            directories.push(home.join(".local/share/fonts"));
+            directories.push(home.join(".fonts"));
+        }
+        return directories;
+    }
+
+    #[allow(unreachable_code)]
+    Vec::new()
 }
 
 fn system_cjk_font_candidates() -> Vec<PathBuf> {
@@ -550,5 +766,21 @@ mod tests {
     fn capability_labels_are_user_facing() {
         assert_eq!(Capability::Available.label(), "可用");
         assert_eq!(Capability::Degraded.label(), "受限");
+    }
+
+    #[test]
+    fn custom_font_extensions_are_case_insensitive() {
+        assert!(is_supported_font_path(std::path::Path::new("ui.ttf")));
+        assert!(is_supported_font_path(std::path::Path::new("ui.OTF")));
+        assert!(is_supported_font_path(std::path::Path::new("ui.TtC")));
+        assert!(is_supported_font_path(std::path::Path::new("ui.otc")));
+        assert!(!is_supported_font_path(std::path::Path::new("ui.woff2")));
+        assert!(!is_supported_font_path(std::path::Path::new("ui")));
+    }
+
+    #[test]
+    fn regular_faces_are_preferred_for_family_selection() {
+        assert!(regular_style_rank("Regular") < regular_style_rank("Bold"));
+        assert!(regular_style_rank("Normal") < regular_style_rank("Italic"));
     }
 }

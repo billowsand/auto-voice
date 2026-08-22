@@ -6,7 +6,7 @@
 /// 设置改动通过 [`Runtime`] 实时生效：触发键、能量阈值、LLM 开关立刻换用新值，
 /// 换模型/后端则在本线程空闲时重新加载引擎，都不需要重启程序。
 use anyhow::Result;
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, StreamTrait};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
@@ -35,24 +35,11 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
         );
     }
 
-    let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .ok_or_else(|| anyhow::anyhow!("No input device found"))?;
-
-    let supported_config = device.default_input_config()?;
-    let sample_rate = supported_config.sample_rate().0;
-    let channels = supported_config.channels() as usize;
-    // 只查询设备参数，不在这里打开输入流：麦克风按需开关（见主循环）。
-    let stream_config: cpal::StreamConfig = supported_config.into();
-
     let use_osd = osd.is_some();
     tracing::info!(
-        "PTT Mic: {} | {}Hz {}ch | 触发键: {}",
-        device.name()?,
-        sample_rate,
-        channels,
+        "PTT ready | 触发键: {} | 麦克风: {}",
         runtime.live().ptt_key,
+        runtime.live().input_device.as_deref().unwrap_or("系统默认"),
     );
     if !use_osd {
         println!(
@@ -139,6 +126,7 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
     // 空闲时进程不占用录音设备，Windows 也不会显示"正在使用麦克风"。
     let mut engine: Option<Arc<AsrEngine>> = None;
     let mut stream: Option<cpal::Stream> = None;
+    let mut active_format: Option<(u32, usize)> = None;
     // Runs the recogniser over the audio so far while the key is still held, so the overlay can
     // show the transcript building up. Retired the moment the key is released.
     let mut preview: Option<LivePreview> = None;
@@ -182,10 +170,23 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
             if ready {
                 while audio_rx.try_recv().is_ok() {} // 丢弃上一轮遗留的音频
                 speech_buf.clear();
-                match open_mic(&device, &stream_config, audio_tx.clone()) {
+                match open_selected_mic(tunables.input_device.as_deref(), audio_tx.clone()) {
                     Ok(opened) => {
-                        tracing::info!("麦克风已打开");
-                        stream = Some(opened);
+                        tracing::info!(
+                            "麦克风已打开: {} | {}Hz {}ch{}",
+                            opened.name,
+                            opened.sample_rate,
+                            opened.channels,
+                            if opened.used_fallback {
+                                "（所选设备不可用，已回退系统默认）"
+                            } else {
+                                ""
+                            }
+                        );
+                        let sample_rate = opened.sample_rate;
+                        let channels = opened.channels;
+                        active_format = Some((sample_rate, channels));
+                        stream = Some(opened.stream);
                         match osd {
                             Some(ref osd) => {
                                 osd.set_level(0.0);
@@ -217,6 +218,7 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
 
         // ② 录音中 → 收音 + 更新浮层电平
         if stream.is_some() && is_held {
+            let channels = active_format.map_or(1, |(_, channels)| channels);
             match audio_rx.recv_timeout(Duration::from_millis(30)) {
                 Ok(chunk) => {
                     if let Some(ref osd) = osd {
@@ -238,6 +240,7 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
         if let Some(opened) = stream.take() {
             drop(opened);
             tracing::info!("麦克风已关闭");
+            let (sample_rate, channels) = active_format.take().unwrap_or((16_000, 1));
             // Retire the preview before the tail is collected: whatever it has already put on
             // the overlay stays there until the real transcript replaces it.
             preview = None;
@@ -304,6 +307,55 @@ fn open_mic(
     )?;
     stream.play()?;
     Ok(stream)
+}
+
+struct OpenedMic {
+    stream: cpal::Stream,
+    sample_rate: u32,
+    channels: usize,
+    name: String,
+    used_fallback: bool,
+}
+
+fn open_selected_mic(preferred: Option<&str>, tx: mpsc::SyncSender<Vec<f32>>) -> Result<OpenedMic> {
+    let selection = crate::audio::select_input_device(preferred)?;
+    let should_retry_default = preferred.is_some() && !selection.used_fallback;
+    let selected_name = selection.name.clone();
+    match open_input_device(selection, tx.clone()) {
+        Ok(opened) => Ok(opened),
+        Err(error) if should_retry_default => {
+            tracing::warn!(
+                "Failed to open selected microphone {:?}: {error:#}; trying the system default",
+                selected_name
+            );
+            let fallback = crate::audio::select_input_device(None)?;
+            if fallback.name == selected_name {
+                return Err(error);
+            }
+            let mut opened = open_input_device(fallback, tx)?;
+            opened.used_fallback = true;
+            Ok(opened)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn open_input_device(
+    selection: crate::audio::InputDeviceSelection,
+    tx: mpsc::SyncSender<Vec<f32>>,
+) -> Result<OpenedMic> {
+    let supported_config = selection.device.default_input_config()?;
+    let sample_rate = supported_config.sample_rate().0;
+    let channels = supported_config.channels() as usize;
+    let stream_config: cpal::StreamConfig = supported_config.into();
+    let stream = open_mic(&selection.device, &stream_config, tx)?;
+    Ok(OpenedMic {
+        stream,
+        sample_rate,
+        channels,
+        name: selection.name,
+        used_fallback: selection.used_fallback,
+    })
 }
 
 fn rms_energy(samples: &[f32], channels: usize) -> f32 {

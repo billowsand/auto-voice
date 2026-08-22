@@ -23,6 +23,12 @@ pub struct ConfigFile {
     /// recogniser pass a couple of times a second on a background thread.
     pub overlay_live_preview: Option<bool>,
 
+    /// Preferred audio input device name. `None` follows the operating-system default.
+    pub input_device: Option<String>,
+
+    /// System UI font families, in fallback order. The first font containing a glyph wins.
+    pub ui_font_families: Option<Vec<String>>,
+
     /// ASR 后端选择: "sense-voice"（默认）或 "funasr-nano"
     pub asr_backend: Option<String>,
 
@@ -227,5 +233,18 @@ mod tests {
         assert!(text.contains("ptt_key = \"CapsLock\""));
         assert!(!text.contains("source_path"));
         assert!(!text.contains("private/location"));
+    }
+
+    #[test]
+    fn custom_font_families_round_trip_through_toml() {
+        let config = ConfigFile {
+            ui_font_families: Some(vec!["Segoe UI".to_owned(), "Microsoft YaHei".to_owned()]),
+            ..ConfigFile::default()
+        };
+
+        let text = toml::to_string(&config).expect("config should serialize");
+        let decoded: ConfigFile = toml::from_str(&text).expect("config should deserialize");
+
+        assert_eq!(decoded.ui_font_families, config.ui_font_families);
     }
 }
