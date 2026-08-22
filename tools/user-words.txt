@@ -1,22 +1,26 @@
-# 同音字 / 拼音 → 汉字 替换规则
+# 用户词典：同音字 / 拼音 → 汉字 替换规则
 #
-# 每行一条规则。两种格式都可以：
+# 最简单的用法 —— 每行只写一个正确的中文词，不用写拼音。
+# 脚本会自动查 models/hr/lexicon.txt 推导出带声调拼音：
 #
-#   1) 拼音串<TAB>目标汉字
-#          xuan2jie4\t玄戒
+#     玄戒
+#     玄戒芯片
 #
-#   2) pynini 风格（与 sherpa-onnx colab 教程一致）
-#          pynini.cross("xuan2jie4", "玄戒")
-#
-# 编辑后运行：
+# 编辑后运行（auto-voice 下次启动时自动生效）：
 #     tools/.venv/Scripts/python.exe tools/build_hr_rules.py
 #
-# （需要 kaldifst，只有 CPython 3.8-3.13 有预编译 wheel；tools/.venv 就是为此
-#   建的 3.11 环境。用系统的 python 3.14 会退化成源码编译并失败。）
+# ── 进阶：多音字 / 特殊读音 ────────────────────────────────────────────────
+# 自动查表只会给出每个字的“主读音”。如果你的词里某个字要读别的音，
+# 就显式写出拼音（拼音和中文之间用 Tab 或空格隔开）：
 #
-# 生成的文件会覆盖 models/hr/replace.fst，auto-voice 下次启动时自动生效。
-# 拼音音调用数字表示：ma1=妈, ma2=麻, ma3=马, ma4=骂, ma5=· (轻声)
+#     le4shi2 乐事
+#     xuan2jie4	玄戒
+#
+# 也兼容 sherpa-onnx 教程里的 pynini 写法：
+#     pynini.cross("xuan2jie4", "玄戒")
+#
+# 声调用数字表示：ma1=妈 ma2=麻 ma3=马 ma4=骂 ma5=·(轻声)
+# 注意：右侧必须是纯中文（不能含英文字母/数字），否则该条会被跳过。
 
-pynini.cross("xuan2jie4",          "玄戒")
-pynini.cross("xuan2jie4xin1pian1", "玄戒芯片")
-pynini.cross("xuan2jie4xing1pian1","玄戒芯片")
+玄戒
+玄戒芯片
