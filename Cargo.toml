@@ -66,7 +66,7 @@ rubato = "0.15"
 cpal = "0.15"
 
 # HTTP 客户端 (LMStudio API)
-reqwest = { version = "0.12", features = ["json", "stream", "blocking"] }
+reqwest = { version = "0.13", features = ["json", "stream", "blocking"] }
 
 # 剪切板
 arboard = "3"
