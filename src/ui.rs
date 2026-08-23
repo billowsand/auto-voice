@@ -1060,13 +1060,22 @@ impl eframe::App for DesktopApp {
         #[cfg(target_os = "linux")]
         {
             // tray-icon's AppIndicator backend is GTK based, while eframe owns the native
-            // event loop. Pump pending GTK work on the main thread so StatusNotifier items
-            // are registered and menu clicks reach Omarchy/other Linux panels.
+            // event loop. A popup menu needs several consecutive iterations to map, grab
+            // input and stay open — Wayland popups are especially sensitive to the grab
+            // serial going stale — so it is worth draining more than one event per tick
+            // instead of handling at most one. But GTK's AppIndicator/StatusNotifierItem
+            // backend keeps talking to the host panel over D-Bus, and `iteration()` can
+            // block on that traffic; an unbounded drain here stalls this thread long enough
+            // that Hyprland's compositor ping times out and shows "Application is not
+            // responding". Cap it so the loop always yields back to winit quickly.
             let context = gtk::glib::MainContext::default();
-            if context.pending() {
+            for _ in 0..16 {
+                if !context.pending() {
+                    break;
+                }
                 context.iteration(false);
             }
-            ctx.request_repaint_after(Duration::from_millis(100));
+            ctx.request_repaint_after(Duration::from_millis(30));
         }
 
         let close_requested = ctx.input(|input| input.viewport().close_requested());

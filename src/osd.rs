@@ -866,7 +866,10 @@ fn draw_meter(
 }
 
 /// Scrolling history of the microphone level: what was actually heard, not a canned animation.
-fn draw_waveform(painter: &egui::Painter, rect: Rect, levels: &[f32], color: Color32) {
+///
+/// `pub(crate)` so the isolated Wayland OSD process ([`crate::wayland_osd`]) can paint the same
+/// waveform from the level history it receives over IPC, instead of maintaining a second copy.
+pub(crate) fn draw_waveform(painter: &egui::Painter, rect: Rect, levels: &[f32], color: Color32) {
     if rect.width() <= 0.0 || levels.is_empty() {
         return;
     }

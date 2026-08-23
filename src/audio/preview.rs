@@ -17,7 +17,6 @@ use std::time::{Duration, Instant};
 
 use crate::asr::AsrEngine;
 use crate::audio::resample::to_mono_16k;
-use crate::osd::OsdHandle;
 
 /// Minimum gap between two preview passes. Fast enough to feel live, slow enough that the
 /// recogniser is idle most of the time.
@@ -44,9 +43,12 @@ pub struct LivePreview {
 }
 
 impl LivePreview {
+    /// `on_partial` is called with the running transcript from a background thread each time a
+    /// preview pass finishes. It is generic rather than tied to [`crate::osd::OsdHandle`] so the
+    /// isolated Wayland OSD process can wire it to an IPC send instead.
     pub fn start(
         engine: Arc<AsrEngine>,
-        osd: OsdHandle,
+        on_partial: impl Fn(String) + Send + 'static,
         sample_rate: u32,
         channels: u16,
     ) -> Option<Self> {
@@ -58,7 +60,7 @@ impl LivePreview {
         let worker = shared.clone();
         std::thread::Builder::new()
             .name("asr-preview".to_owned())
-            .spawn(move || run(worker, engine, osd, sample_rate, channels))
+            .spawn(move || run(worker, engine, on_partial, sample_rate, channels))
             .map_err(|error| tracing::warn!("Live preview unavailable: {error}"))
             .ok()?;
         Some(Self { shared })
@@ -83,7 +85,7 @@ impl Drop for LivePreview {
 fn run(
     shared: Arc<Shared>,
     engine: Arc<AsrEngine>,
-    osd: OsdHandle,
+    on_partial: impl Fn(String) + Send + 'static,
     sample_rate: u32,
     channels: u16,
 ) {
@@ -112,7 +114,7 @@ fn run(
         if shared.stopped.load(Ordering::Acquire) {
             return;
         }
-        osd.set_partial(&joined(&committed_text, &tail.text));
+        on_partial(joined(&committed_text, &tail.text));
         interval = PASS_INTERVAL
             .max(started.elapsed().mul_f32(1.5))
             .min(MAX_INTERVAL);

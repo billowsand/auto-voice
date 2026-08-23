@@ -23,6 +23,9 @@ use crate::runtime::{EngineStatus, LiveTunables, Runtime};
 /// What one dictation cycle produced, so the overlay can tell the truth about it.
 enum Outcome {
     Inserted(String),
+    /// Wayland: no focused window to safely target with a synthetic paste, so the text was left
+    /// on the clipboard instead of guessing where it should go.
+    CopiedOnly(String),
     NothingHeard,
     Failed(String),
 }
@@ -45,22 +48,13 @@ impl WaylandOsd {
         }
     }
 
-    fn show(&mut self, title: &str, body: &str, expire_ms: u32) {
+    fn show(&mut self, kind: &str, title: &str, body: &str, expire_ms: u32) {
         if !self.enabled {
             return;
         }
 
         #[cfg(target_os = "linux")]
         {
-            let kind = if title.contains("正在聆听") {
-                "listening"
-            } else if title.contains("正在转写") {
-                "processing"
-            } else if title.contains("已插入") {
-                "done"
-            } else {
-                "failed"
-            };
             if crate::wayland_osd::show(kind, body).is_ok() {
                 return;
             }
@@ -94,6 +88,28 @@ impl WaylandOsd {
             }
         }
     }
+
+    /// Push one microphone level sample so the isolated OSD can draw the same waveform the
+    /// desktop overlay does. No-op unless this OSD is the one actually in use.
+    fn set_level(&self, level: f32) {
+        if !self.enabled {
+            return;
+        }
+        #[cfg(target_os = "linux")]
+        crate::wayland_osd::send_level(level);
+    }
+}
+
+/// Forward a running-transcript update to the isolated Wayland OSD, if it is the one in use.
+/// Free function (rather than a `WaylandOsd` method) so it can be moved into the `'static`
+/// preview-worker closure without borrowing the loop-local `WaylandOsd` value.
+fn forward_partial_to_wayland_osd(enabled: bool, text: &str) {
+    #[cfg(target_os = "linux")]
+    if enabled {
+        crate::wayland_osd::send_partial(text);
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = (enabled, text);
 }
 
 pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
@@ -290,23 +306,45 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
                                     .then(|| engine.clone())
                                     .flatten()
                                     .and_then(|engine| {
+                                        let osd = osd.clone();
                                         LivePreview::start(
                                             engine,
-                                            osd.clone(),
+                                            move |text| osd.set_partial(&text),
                                             sample_rate,
                                             channels as u16,
                                         )
                                     });
                             }
                             None => {
+                                let hotkey_label =
+                                    crate::config::describe_ptt_key(&tunables.ptt_key);
                                 wayland_osd.show(
+                                    "listening",
                                     "Auto Voice · 正在聆听",
-                                    "松开右 Alt 后开始转写",
+                                    &format!("松开 {hotkey_label} 后开始转写"),
                                     0,
                                 );
                                 if !wayland_osd.enabled {
                                     eprint!("\r🔴 录音中...                    ");
                                 }
+                                let wayland_osd_enabled = wayland_osd.enabled;
+                                preview = tunables
+                                    .live_preview
+                                    .then(|| engine.clone())
+                                    .flatten()
+                                    .and_then(|engine| {
+                                        LivePreview::start(
+                                            engine,
+                                            move |text| {
+                                                forward_partial_to_wayland_osd(
+                                                    wayland_osd_enabled,
+                                                    &text,
+                                                )
+                                            },
+                                            sample_rate,
+                                            channels as u16,
+                                        )
+                                    });
                             }
                         }
                     }
@@ -335,9 +373,11 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
             let channels = active_format.map_or(1, |(_, channels)| channels);
             match audio_rx.recv_timeout(Duration::from_millis(30)) {
                 Ok(chunk) => {
-                    if let Some(ref osd) = osd {
-                        let energy = rms_energy(&chunk, channels);
-                        osd.set_level(normalize_osd_level(energy, tunables.energy_threshold));
+                    let energy = rms_energy(&chunk, channels);
+                    let level = normalize_osd_level(energy, tunables.energy_threshold);
+                    match osd {
+                        Some(ref osd) => osd.set_level(level),
+                        None => wayland_osd.set_level(level),
                     }
                     if let Some(ref preview) = preview {
                         preview.push(&chunk);
@@ -368,7 +408,12 @@ pub fn run_ptt(runtime: &Runtime, osd: Option<OsdHandle>) -> Result<()> {
                     osd.set_processing();
                 }
                 None => {
-                    wayland_osd.show("Auto Voice · 正在转写", "正在识别并插入活动窗口", 0);
+                    wayland_osd.show(
+                        "processing",
+                        "Auto Voice · 正在转写",
+                        "正在识别并插入活动窗口",
+                        0,
+                    );
                     if !wayland_osd.enabled {
                         eprint!("\r⏳ 识别中...                    ");
                     }
@@ -437,18 +482,30 @@ fn listen_with_rdev(held: Arc<AtomicBool>, running: Arc<AtomicBool>, runtime: Ru
 /// 把一次听写的结果告诉用户：托盘模式走浮层，CLI 模式走 stderr。
 fn report(osd: &Option<OsdHandle>, wayland_osd: &mut WaylandOsd, outcome: Outcome) {
     match &outcome {
-        Outcome::Inserted(text) => wayland_osd.show("Auto Voice · 已插入", text, 2200),
+        Outcome::Inserted(text) => wayland_osd.show("done", "Auto Voice · 已插入", text, 2200),
+        Outcome::CopiedOnly(text) => wayland_osd.show(
+            "copied",
+            "Auto Voice · 已复制",
+            &format!("未找到可粘贴的窗口，已复制到剪贴板：{text}"),
+            3200,
+        ),
         Outcome::NothingHeard => {
-            wayland_osd.show("Auto Voice · 未识别", "没有听清，请再试一次", 2600)
+            wayland_osd.show("failed", "Auto Voice · 未识别", "没有听清，请再试一次", 2600)
         }
-        Outcome::Failed(message) => wayland_osd.show("Auto Voice · 失败", message, 3500),
+        Outcome::Failed(message) => wayland_osd.show("failed", "Auto Voice · 失败", message, 3500),
     }
     match (osd, outcome) {
         (Some(osd), Outcome::Inserted(text)) => osd.set_done(&text),
+        (Some(osd), Outcome::CopiedOnly(text)) => {
+            osd.set_notice(format!("已复制到剪贴板，请手动粘贴：{text}"), false)
+        }
         (Some(osd), Outcome::NothingHeard) => osd.set_notice("没有听清，再按住试一次", false),
         (Some(osd), Outcome::Failed(message)) => osd.set_notice(message, true),
         (None, Outcome::Inserted(_)) if !wayland_osd.enabled => {
             eprint!("\r✅ 已粘贴                       \n")
+        }
+        (None, Outcome::CopiedOnly(_)) if !wayland_osd.enabled => {
+            eprint!("\r📋 已复制到剪贴板（未找到粘贴目标）\n")
         }
         (None, Outcome::NothingHeard) if !wayland_osd.enabled => {
             eprint!("\r🤷 没有识别到语音               \n")
@@ -599,15 +656,27 @@ fn process_and_paste(
         tracing::error!("Clipboard write failed: {error:#}");
         return Outcome::Failed("无法写入 Wayland 剪贴板".into());
     }
-    std::thread::sleep(Duration::from_millis(120));
-    if let Err(error) = paste_at_cursor() {
-        tracing::error!("Paste dispatch failed: {error:#}");
-        return Outcome::Failed("文字已复制，但无法发送粘贴快捷键".into());
+    crate::audio::mic::wait_clipboard_ready_pub(&final_text);
+    match paste_at_cursor() {
+        Ok(PasteDelivery::Dispatched) => Outcome::Inserted(final_text),
+        Ok(PasteDelivery::ClipboardOnly) => Outcome::CopiedOnly(final_text),
+        Err(error) => {
+            tracing::error!("Paste dispatch failed: {error:#}");
+            Outcome::Failed("文字已复制，但无法发送粘贴快捷键".into())
+        }
     }
-    Outcome::Inserted(final_text)
 }
 
-fn paste_at_cursor() -> Result<()> {
+/// How the recognised text made it out of `process_and_paste`.
+enum PasteDelivery {
+    /// A synthetic paste chord was sent to the (believed) focused window.
+    Dispatched,
+    /// No focused window could be confirmed, so nothing was sent — the text is only on the
+    /// clipboard. Better than guessing a target and silently pasting into the wrong place.
+    ClipboardOnly,
+}
+
+fn paste_at_cursor() -> Result<PasteDelivery> {
     #[cfg(target_os = "linux")]
     if crate::platform::is_wayland_session() {
         return wayland_paste_at_cursor();
@@ -624,7 +693,7 @@ fn paste_at_cursor() -> Result<()> {
             enigo.key(modifier, Direction::Press)?;
             enigo.key(Key::Unicode('v'), Direction::Click)?;
             enigo.key(modifier, Direction::Release)?;
-            Ok(())
+            Ok(PasteDelivery::Dispatched)
         }
         Err(error) => Err(error.into()),
     }
@@ -639,15 +708,30 @@ fn paste_at_cursor() -> Result<()> {
 /// because `sendshortcut` can leave synthetic keys repeating and `wtype` merges with whatever
 /// modifier the user is still physically holding.
 #[cfg(target_os = "linux")]
-fn wayland_paste_at_cursor() -> Result<()> {
-    let terminal = hyprland_terminal_focused();
+fn wayland_paste_at_cursor() -> Result<PasteDelivery> {
+    let hyprland = crate::platform::is_hyprland_session();
+    // Hyprland alone lets us ask who has keyboard focus. Without that confirmation a synthetic
+    // paste chord goes wherever Hyprland last remembered as focused — which, for a portal dialog
+    // or a window that has since lost focus, can silently insert the text somewhere the user
+    // never sees. `focused` is `None` both when nothing is focused and on non-Hyprland
+    // compositors, where this check simply cannot be made.
+    let focused = hyprland.then(hyprland_active_window).flatten();
+    if hyprland && focused.is_none() {
+        tracing::warn!(
+            "Hyprland reports no focused window; leaving the text on the clipboard instead of \
+             guessing a paste target"
+        );
+        return Ok(PasteDelivery::ClipboardOnly);
+    }
+
+    let terminal = focused.as_ref().is_some_and(hyprland_window_is_terminal);
     let (mods, key) = if terminal {
         ("SHIFT", "Insert")
     } else {
         ("CTRL", "V")
     };
 
-    if crate::platform::is_hyprland_session() {
+    if hyprland {
         let lua = format!(
             r#"hl.dispatch(hl.dsp.send_key_state({{ mods = "{mods}", key = "{key}", state = "down" }})); hl.timer(function() hl.dispatch(hl.dsp.send_key_state({{ mods = "{mods}", key = "{key}", state = "up" }})) end, {{ timeout = 50, type = "oneshot" }})"#
         );
@@ -657,7 +741,7 @@ fn wayland_paste_at_cursor() -> Result<()> {
         {
             Ok(status) if status.success() => {
                 tracing::info!("Paste shortcut dispatched through Hyprland ({mods}+{key})");
-                return Ok(());
+                return Ok(PasteDelivery::Dispatched);
             }
             Ok(status) => {
                 tracing::warn!("Hyprland paste dispatch failed with {status}; trying wtype")
@@ -681,33 +765,34 @@ fn wayland_paste_at_cursor() -> Result<()> {
     {
         Ok(status) if status.success() => {
             tracing::info!("Paste shortcut dispatched through wtype");
-            Ok(())
+            Ok(PasteDelivery::Dispatched)
         }
         Ok(status) => anyhow::bail!("wtype paste failed with {status}"),
         Err(error) => Err(anyhow::anyhow!("failed to run wtype for paste: {error}")),
     }
 }
 
-/// True when the focused Hyprland window is a terminal emulator, where paste is Shift+Insert.
-/// Query failures are conservative: the regular Ctrl+V is the right choice almost everywhere.
+/// The focused Hyprland window, or `None` when nothing has keyboard focus (Hyprland reports an
+/// empty `{}` in that case) or the query itself failed.
 #[cfg(target_os = "linux")]
-fn hyprland_terminal_focused() -> bool {
-    if !crate::platform::is_hyprland_session() {
-        return false;
-    }
-    let Ok(output) = std::process::Command::new("hyprctl")
+fn hyprland_active_window() -> Option<serde_json::Value> {
+    let output = std::process::Command::new("hyprctl")
         .args(["activewindow", "-j"])
         .output()
-    else {
-        return false;
-    };
+        .ok()?;
     if !output.status.success() {
-        return false;
+        return None;
     }
-    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&output.stdout) else {
-        return false;
-    };
-    let Some(class) = value.get("class").and_then(|class| class.as_str()) else {
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    value.get("address")?.as_str()?;
+    Some(value)
+}
+
+/// True when a Hyprland window is a terminal emulator, where paste is Shift+Insert rather than
+/// Ctrl+V (the shell reads a raw Ctrl+V as literal-next).
+#[cfg(target_os = "linux")]
+fn hyprland_window_is_terminal(window: &serde_json::Value) -> bool {
+    let Some(class) = window.get("class").and_then(|class| class.as_str()) else {
         return false;
     };
     let class = class.to_ascii_lowercase();
