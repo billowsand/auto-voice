@@ -60,7 +60,7 @@ symphonia = { version = "0.5", features = [
 ] }
 
 # 重采样
-rubato = "0.15"
+rubato = "5.0"
 
 # 麦克风采集 (Windows: WASAPI)
 cpal = "0.15"
