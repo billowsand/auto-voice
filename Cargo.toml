@@ -47,7 +47,7 @@ eframe = { version = "0.35", default-features = false, features = [
 ] }
 
 # 音频解码 (MP3/WAV/FLAC/OGG/M4A/MKV/AIFF/…)
-symphonia = { version = "0.5", features = [
+symphonia = { version = "0.6", features = [
     "mp3",    # MP3, MP2, MP1
     "aac",    # AAC (裸流)
     "flac",   # FLAC
