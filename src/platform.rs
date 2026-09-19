@@ -33,249 +33,28 @@ impl Capability {
 }
 
 pub fn capabilities() -> Capabilities {
-    #[cfg(target_os = "windows")]
-    {
-        Capabilities {
-            platform_name: "Windows",
-            session_name: "Win32".to_owned(),
-            global_ptt: Capability::Available,
-            overlay_position: Capability::Available,
-            synthetic_paste: Capability::Available,
-            permission_hint: None,
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        Capabilities {
-            platform_name: "macOS",
-            session_name: "AppKit".to_owned(),
-            global_ptt: Capability::PermissionRequired,
-            overlay_position: Capability::Available,
-            synthetic_paste: Capability::PermissionRequired,
-            permission_hint: Some("需要在系统设置中允许麦克风、辅助功能与输入监控。"),
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        let wayland = is_wayland_session();
-        let hyprland = wayland && is_hyprland_session();
-        Capabilities {
-            platform_name: "Linux",
-            session_name: if wayland { "Wayland" } else { "X11" }.to_owned(),
-            global_ptt: Capability::Available,
-            overlay_position: if wayland && !hyprland {
-                Capability::Degraded
-            } else {
-                Capability::Available
-            },
-            synthetic_paste: if wayland && !hyprland {
-                Capability::Degraded
-            } else {
-                Capability::Available
-            },
-            permission_hint: (wayland && !hyprland)
-                .then_some("当前为通用 Wayland：需要合成器提供全局 PTT、悬浮窗定位和模拟粘贴。"),
-        }
-    }
-
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    {
-        Capabilities {
-            platform_name: std::env::consts::OS,
-            session_name: "unsupported".to_owned(),
-            global_ptt: Capability::Degraded,
-            overlay_position: Capability::Degraded,
-            synthetic_paste: Capability::Degraded,
-            permission_hint: Some("当前平台尚未经过支持验证。"),
-        }
+    Capabilities {
+        platform_name: "Windows",
+        session_name: "Win32".to_owned(),
+        global_ptt: Capability::Available,
+        overlay_position: Capability::Available,
+        synthetic_paste: Capability::Available,
+        permission_hint: None,
     }
 }
 
-#[cfg(target_os = "linux")]
-pub fn is_hyprland_session() -> bool {
-    std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
-        || std::env::var("XDG_CURRENT_DESKTOP")
-            .is_ok_and(|desktop| desktop.to_ascii_lowercase().contains("hyprland"))
-}
-
-/// Hide the settings window into the tray. Returns false when the window is not known to the
-/// compositor yet (only possible during the first frames), so the caller can retry.
+/// Top-left corner, in physical pixels, where the overlay is centred on the active monitor.
 ///
-/// winit's `set_visible` is a no-op on Wayland and Hyprland ignores `xdg_toplevel.set_minimized`,
-/// so on Hyprland the window is parked on a dedicated special workspace instead. Elsewhere the
-/// minimize request covers compositors that honour it (GNOME, KDE) and X11.
-#[cfg(target_os = "linux")]
-pub fn hide_main_window(ctx: &eframe::egui::Context) -> bool {
-    use eframe::egui::{ViewportCommand, ViewportId};
-
-    if is_hyprland_session() {
-        return hyprland_park_main_window();
-    }
-    if is_wayland_session() {
-        ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Minimized(true));
-    } else {
-        ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Visible(false));
-    }
-    true
-}
-
-/// Bring the settings window back after [`hide_main_window`].
-///
-/// There is no client-side unminimize on Wayland (winit only forwards the minimize direction),
-/// so on Hyprland the window is moved back to the active workspace and focused via hyprctl.
-#[cfg(target_os = "linux")]
-pub fn show_main_window(ctx: &eframe::egui::Context) {
-    use eframe::egui::{ViewportCommand, ViewportId};
-
-    if is_hyprland_session() {
-        hyprland_restore_main_window();
-        return;
-    }
-    if !is_wayland_session() {
-        ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Visible(true));
-        ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Focus);
-    }
-}
-
-/// Wayland app id set by `ui::native_options`; Hyprland reports it as the window class.
-#[cfg(target_os = "linux")]
-const HYPRLAND_WINDOW_CLASS: &str = "io.github.billowsand.auto-voice";
-
-/// Hyprland special workspace the settings window is parked on while "in the tray".
-#[cfg(target_os = "linux")]
-const HYPRLAND_PARK_WORKSPACE: &str = "special:auto-voice";
-
-#[cfg(target_os = "linux")]
-fn hyprctl(args: &[&str]) -> bool {
-    std::process::Command::new("hyprctl")
-        .args(args)
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
-}
-
-/// The `0x…` address Hyprland assigned to the settings window, or `None` while the window has
-/// not been mapped yet.
-#[cfg(target_os = "linux")]
-fn hyprland_main_window_address() -> Option<String> {
-    let output = std::process::Command::new("hyprctl")
-        .args(["clients", "-j"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let clients: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
-    clients
-        .as_array()?
-        .iter()
-        .find(|client| {
-            client.get("class").and_then(|class| class.as_str()) == Some(HYPRLAND_WINDOW_CLASS)
-        })
-        .and_then(|client| client.get("address"))
-        .and_then(|address| address.as_str())
-        .map(str::to_owned)
-}
-
-#[cfg(target_os = "linux")]
-fn hyprland_active_workspace_id() -> Option<i64> {
-    let output = std::process::Command::new("hyprctl")
-        .args(["activeworkspace", "-j"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    serde_json::from_slice::<serde_json::Value>(&output.stdout)
-        .ok()?
-        .get("id")?
-        .as_i64()
-}
-
-/// Hyprland can run on the Lua config manager (default since the Lua migration), where
-/// `hyprctl dispatch` expects a Lua expression (`hl.dsp.…`) instead of the classic
-/// `dispatcher args` syntax. Probe once with a no-op and cache the answer.
-#[cfg(target_os = "linux")]
-fn hyprctl_lua_dispatch() -> bool {
-    use std::sync::OnceLock;
-    static LUA_DISPATCH: OnceLock<bool> = OnceLock::new();
-    *LUA_DISPATCH.get_or_init(|| hyprctl(&["dispatch", "hl.dsp.no_op()"]))
-}
-
-#[cfg(target_os = "linux")]
-fn hyprland_park_main_window() -> bool {
-    let Some(address) = hyprland_main_window_address() else {
-        return false;
-    };
-    let selector = format!("address:{address}");
-    if hyprctl_lua_dispatch() {
-        hyprctl(&[
-            "dispatch",
-            &format!(
-                "hl.dsp.window.move({{ workspace = \"{HYPRLAND_PARK_WORKSPACE}\", window = \"{selector}\" }})"
-            ),
-        ])
-    } else {
-        hyprctl(&[
-            "dispatch",
-            &format!("movetoworkspacesilent {HYPRLAND_PARK_WORKSPACE},{selector}"),
-        ])
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn hyprland_restore_main_window() {
-    let Some(address) = hyprland_main_window_address() else {
-        return;
-    };
-    let selector = format!("address:{address}");
-    let workspace = hyprland_active_workspace_id();
-    if hyprctl_lua_dispatch() {
-        if let Some(workspace) = workspace {
-            hyprctl(&[
-                "dispatch",
-                &format!(
-                    "hl.dsp.window.move({{ workspace = \"{workspace}\", window = \"{selector}\" }})"
-                ),
-            ]);
-        }
-        hyprctl(&[
-            "dispatch",
-            &format!("hl.dsp.focus({{ window = \"{selector}\" }})"),
-        ]);
-    } else {
-        if let Some(workspace) = workspace {
-            hyprctl(&[
-                "dispatch",
-                &format!("movetoworkspace {workspace},{selector}"),
-            ]);
-        }
-        hyprctl(&["dispatch", &format!("focuswindow {selector}")]);
-    }
-}
-
-/// Top-left corner, in physical pixels, where the overlay should pop for the app that currently
-/// has focus. `None` means the caller should fall back to the primary monitor.
-///
-/// When the focused app exposes a Win32 caret the overlay sits right under the insertion point,
-/// the way a system IME candidate window does. Apps that draw their own caret (Chromium,
-/// Electron, most editors) expose nothing, so we fall back to the bottom of their window.
-///
-/// `card_inset` is the gap between the window's corner and the visible card inside it, so the
-/// card rather than the transparent canvas is what gets aligned with the caret.
-#[cfg(target_os = "windows")]
-pub fn overlay_origin(size: Vec2, card_inset: Vec2, follow_caret: bool) -> Option<Pos2> {
-    use windows_sys::Win32::Foundation::{POINT, RECT};
+/// The overlay is intentionally independent from the focused app's dialog or text caret. This
+/// keeps the interaction predictable across browsers, editors, remote desktops, and apps that
+/// draw their own input controls. The active window is only used to choose the monitor.
+pub fn overlay_origin(size: Vec2, _card_inset: Vec2, _follow_caret: bool) -> Option<Pos2> {
+    use windows_sys::Win32::Foundation::POINT;
     use windows_sys::Win32::Graphics::Gdi::{
-        ClientToScreen, GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO,
+        GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO,
         MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTOPRIMARY,
     };
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetGUIThreadInfo, GetWindowRect, GetWindowThreadProcessId,
-        GUITHREADINFO,
-    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 
     // A null foreground window (rare, e.g. during a desktop switch) still gets a sensible
     // position rather than `None`, because the overlay is parked off-screen between uses and
@@ -293,44 +72,8 @@ pub fn overlay_origin(size: Vec2, card_inset: Vec2, follow_caret: bool) -> Optio
         (GetMonitorInfoW(monitor, &mut info) != 0).then_some(info.rcWork)?
     };
 
-    let caret = (follow_caret && !foreground.is_null())
-        .then(|| unsafe {
-            let thread = GetWindowThreadProcessId(foreground, std::ptr::null_mut());
-            let mut info: GUITHREADINFO = std::mem::zeroed();
-            info.cbSize = std::mem::size_of::<GUITHREADINFO>() as u32;
-            if GetGUIThreadInfo(thread, &mut info) == 0 || info.hwndCaret.is_null() {
-                return None;
-            }
-            let caret = info.rcCaret;
-            if caret.bottom <= caret.top {
-                return None;
-            }
-            let mut origin = POINT {
-                x: caret.left,
-                y: caret.bottom,
-            };
-            (ClientToScreen(info.hwndCaret, &mut origin) != 0).then_some(origin)
-        })
-        .flatten();
-
-    let (x, y) = match caret {
-        // Slightly left of and below the insertion point, like an IME candidate bar.
-        Some(point) => (
-            point.x as f32 - 18.0 - card_inset.x,
-            point.y as f32 + 14.0 - card_inset.y,
-        ),
-        None => {
-            let mut rect: RECT = unsafe { std::mem::zeroed() };
-            let window = (!foreground.is_null()
-                && unsafe { GetWindowRect(foreground, &mut rect) } != 0)
-                .then_some(rect);
-            let host = window.unwrap_or(work_area);
-            (
-                (host.left + host.right) as f32 * 0.5 - size.x * 0.5,
-                host.bottom as f32 - size.y - 96.0,
-            )
-        }
-    };
+    let x = (work_area.left + work_area.right) as f32 * 0.5 - size.x * 0.5;
+    let y = (work_area.top + work_area.bottom) as f32 * 0.5 - size.y * 0.5;
 
     Some(Pos2::new(
         x.clamp(
@@ -342,36 +85,6 @@ pub fn overlay_origin(size: Vec2, card_inset: Vec2, follow_caret: bool) -> Optio
             (work_area.bottom as f32 - size.y - 8.0).max(work_area.top as f32 + 8.0),
         ),
     ))
-}
-
-#[cfg(target_os = "linux")]
-pub fn overlay_origin(size: Vec2, card_inset: Vec2, follow_caret: bool) -> Option<Pos2> {
-    if !is_wayland_session() || !follow_caret {
-        return None;
-    }
-
-    // Wayland intentionally does not expose another application's text caret. Hyprland does
-    // expose the pointer position, which is the closest compositor-wide anchor available and
-    // keeps the OSD beside the user's current insertion target instead of inside Settings.
-    let output = std::process::Command::new("hyprctl")
-        .args(["cursorpos", "-j"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let value: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
-    let x = value.get("x")?.as_f64()? as f32;
-    let y = value.get("y")?.as_f64()? as f32;
-    Some(Pos2::new(
-        x + 14.0 - card_inset.x,
-        y + 22.0 - card_inset.y - size.y * 0.15,
-    ))
-}
-
-#[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
-pub fn overlay_origin(_size: Vec2, _card_inset: Vec2, _follow_caret: bool) -> Option<Pos2> {
-    None
 }
 
 /// How the compositor is told which parts of the overlay window are see-through.
@@ -402,7 +115,6 @@ impl OverlayCompositing {
 /// region — the standard recipe for a transparent OpenGL window on Windows, and what gives the
 /// overlay smooth corners. `AUTO_VOICE_OVERLAY=colorkey` falls back to the old 1-bit colour key
 /// for the rare driver that composites the alpha channel as opaque black.
-#[cfg(target_os = "windows")]
 pub fn prepare_overlay_window(window_title: &str) -> Option<OverlayCompositing> {
     use windows_sys::Win32::Graphics::Dwm::{
         DwmEnableBlurBehindWindow, DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE,
@@ -519,7 +231,6 @@ pub fn prepare_overlay_window(window_title: &str) -> Option<OverlayCompositing> 
 /// out of hit-testing while they are also layered, and the layer is exactly what had to go for
 /// the alpha channel to be composited. Answering `WM_NCHITTEST` with `HTTRANSPARENT` is the
 /// same statement made directly, and it does not depend on how the window is composited.
-#[cfg(target_os = "windows")]
 fn make_click_through(window: windows_sys::Win32::Foundation::HWND) {
     use std::sync::atomic::{AtomicIsize, Ordering};
     use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
@@ -570,7 +281,6 @@ fn make_click_through(window: windows_sys::Win32::Foundation::HWND) {
 /// `FindWindowW` searches every process, so with a second copy of auto-voice running — or the
 /// packaged build alongside a development one — it happily hands back the *other* instance's
 /// overlay and leaves ours uncomposited.
-#[cfg(target_os = "windows")]
 fn find_own_window(window_title: &str) -> Option<windows_sys::Win32::Foundation::HWND> {
     use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM};
     use windows_sys::Win32::System::Threading::GetCurrentProcessId;
@@ -610,24 +320,17 @@ fn find_own_window(window_title: &str) -> Option<windows_sys::Win32::Foundation:
     (!search.found.is_null()).then_some(search.found)
 }
 
-#[cfg(not(target_os = "windows"))]
-pub fn prepare_overlay_window(_window_title: &str) -> Option<OverlayCompositing> {
-    // Wayland/X11/macOS composite the alpha channel of the GL surface directly.
-    Some(OverlayCompositing::PerPixelAlpha)
-}
-
-#[cfg(target_os = "windows")]
 fn overlay_mode_override() -> Option<String> {
     std::env::var("AUTO_VOICE_OVERLAY")
         .ok()
         .map(|value| value.trim().to_ascii_lowercase())
 }
 
-/// Fallback overlay origin, in physical pixels: horizontally centred, above the taskbar.
+/// Fallback overlay origin, in physical pixels: centred in the available monitor work area.
 pub fn overlay_fallback_origin(size: Vec2, monitor: Vec2) -> Pos2 {
     Pos2::new(
         ((monitor.x - size.x) * 0.5).max(8.0),
-        (monitor.y - size.y - 110.0).max(8.0),
+        ((monitor.y - size.y) * 0.5).max(8.0),
     )
 }
 
@@ -639,13 +342,6 @@ pub fn app_log_dir() -> PathBuf {
                 .join("logs")
         })
         .unwrap_or_else(|| PathBuf::from("."))
-}
-
-#[cfg(target_os = "linux")]
-pub fn is_wayland_session() -> bool {
-    std::env::var_os("WAYLAND_DISPLAY").is_some()
-        || std::env::var("XDG_SESSION_TYPE")
-            .is_ok_and(|value| value.eq_ignore_ascii_case("wayland"))
 }
 
 #[derive(Debug, Default)]
@@ -856,89 +552,24 @@ fn system_font_files() -> Vec<PathBuf> {
 }
 
 fn system_font_directories() -> Vec<PathBuf> {
-    #[cfg(target_os = "windows")]
-    {
-        let windows_dir = std::env::var_os("WINDIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
-        let mut directories = vec![windows_dir.join("Fonts")];
-        if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
-            directories.push(PathBuf::from(local_app_data).join(r"Microsoft\Windows\Fonts"));
-        }
-        return directories;
+    let windows_dir = std::env::var_os("WINDIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
+    let mut directories = vec![windows_dir.join("Fonts")];
+    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
+        directories.push(PathBuf::from(local_app_data).join(r"Microsoft\Windows\Fonts"));
     }
-
-    #[cfg(target_os = "macos")]
-    {
-        let mut directories = vec![
-            PathBuf::from("/System/Library/Fonts"),
-            PathBuf::from("/Library/Fonts"),
-        ];
-        if let Some(home) = std::env::var_os("HOME") {
-            directories.push(PathBuf::from(home).join("Library/Fonts"));
-        }
-        return directories;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        let mut directories = vec![
-            PathBuf::from("/usr/share/fonts"),
-            PathBuf::from("/usr/local/share/fonts"),
-        ];
-        if let Some(home) = std::env::var_os("HOME") {
-            let home = PathBuf::from(home);
-            directories.push(home.join(".local/share/fonts"));
-            directories.push(home.join(".fonts"));
-        }
-        return directories;
-    }
-
-    #[allow(unreachable_code)]
-    Vec::new()
+    directories
 }
 
 fn system_cjk_font_candidates() -> Vec<PathBuf> {
-    #[cfg(target_os = "windows")]
-    {
-        let windows_dir = std::env::var_os("WINDIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
-        return ["Noto Sans SC (TrueType).otf", "msyh.ttc", "simhei.ttf"]
-            .into_iter()
-            .map(|name| windows_dir.join("Fonts").join(name))
-            .collect();
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        return [
-            "/System/Library/Fonts/PingFang.ttc",
-            "/System/Library/Fonts/STHeiti Light.ttc",
-            "/Library/Fonts/Arial Unicode.ttf",
-        ]
+    let windows_dir = std::env::var_os("WINDIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
+    ["Noto Sans SC (TrueType).otf", "msyh.ttc", "simhei.ttf"]
         .into_iter()
-        .map(std::path::Path::new)
-        .map(std::path::Path::to_path_buf)
-        .collect();
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        return [
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
-            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-        ]
-        .into_iter()
-        .map(std::path::Path::new)
-        .map(std::path::Path::to_path_buf)
-        .collect();
-    }
-
-    #[allow(unreachable_code)]
-    Vec::new()
+        .map(|name| windows_dir.join("Fonts").join(name))
+        .collect()
 }
 
 #[cfg(test)]

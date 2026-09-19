@@ -12,6 +12,7 @@ use eframe::egui::{
     ViewportId,
 };
 
+use crate::config::UiTheme;
 use crate::osd::{self, OsdHandle, OsdPhase};
 
 const SAMPLE: &str =
@@ -28,6 +29,8 @@ pub enum DemoPhase {
     Listening,
     /// Hotkey released, transcript on screen while the text is polished.
     Processing,
+    /// Local LLM is polishing the recognised text.
+    Polishing,
     Done,
     Notice,
 }
@@ -40,18 +43,33 @@ impl std::str::FromStr for DemoPhase {
             "waiting" => Ok(Self::Waiting),
             "listening" => Ok(Self::Listening),
             "processing" => Ok(Self::Processing),
+            "polishing" => Ok(Self::Polishing),
             "done" => Ok(Self::Done),
             "notice" => Ok(Self::Notice),
             other => Err(format!(
-                "unknown phase \"{other}\" (waiting|listening|processing|done|notice)"
+                "unknown phase \"{other}\" (waiting|listening|processing|polishing|done|notice)"
             )),
         }
     }
 }
 
-pub fn run(phase: DemoPhase) -> anyhow::Result<()> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DemoTheme(pub UiTheme);
+
+impl std::str::FromStr for DemoTheme {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        UiTheme::parse(value).map(Self).ok_or_else(|| {
+            format!("unknown theme \"{value}\" (deep-sea-aurora|morning-porcelain|graphite-focus)")
+        })
+    }
+}
+
+pub fn run(phase: DemoPhase, theme: DemoTheme) -> anyhow::Result<()> {
     let osd = OsdHandle::new();
     osd.set_follow_caret(false);
+    osd.set_theme(theme.0);
 
     let viewport = egui::ViewportBuilder::default()
         .with_title("auto-voice overlay demo")
@@ -127,6 +145,12 @@ fn drive(osd: OsdHandle, phase: DemoPhase) {
                 osd.set_processing();
             }
             DemoPhase::Processing => {}
+            DemoPhase::Polishing if osd.snapshot().phase != OsdPhase::Polishing => {
+                osd.set_partial(SAMPLE);
+                osd.set_processing();
+                osd.set_polishing();
+            }
+            DemoPhase::Polishing => {}
             // `set_done` / `set_notice` restart the linger timer, so re-issuing them holds the
             // result card on screen indefinitely for a good look at it.
             DemoPhase::Done => osd.set_done(SAMPLE),

@@ -1,6 +1,6 @@
-//! The push-to-talk overlay: a floating card that pops next to the caret while the hotkey is
-//! held, follows the voice with a live waveform, streams the transcript in as it is recognised,
-//! and fades away once the text has landed.
+//! The push-to-talk overlay: a centred card that appears while the hotkey is held, follows the
+//! voice with a live waveform, streams the transcript in as it is recognised, and fades away once
+//! the text has landed.
 //!
 //! The speech pipeline talks to [`OsdHandle`]. Rendering and native-window details stay
 //! on the desktop UI thread. Nothing is painted unless a dictation is in flight — the native
@@ -18,6 +18,7 @@ use eframe::egui::{
     ViewportBuilder, ViewportCommand, ViewportId,
 };
 
+use crate::config;
 use crate::platform::OverlayCompositing;
 
 /// The native surface is a transparent canvas; the card is drawn inside it so it can grow and
@@ -28,8 +29,8 @@ const CANVAS: Vec2 = Vec2::new(760.0, 260.0);
 /// overlay window by title.
 const OVERLAY_TITLE: &str = "auto-voice status";
 
-/// Where the card sits inside the canvas. The caret anchor is corrected by this, so the card —
-/// not the invisible canvas around it — is what lands under the insertion point.
+/// Where the card sits inside the transparent canvas. Keeping this inset stable lets the card
+/// remain visually centred while its width animates between live and result states.
 const CARD_TOP: f32 = 26.0;
 const CARD_WIDTH_LIVE: f32 = 470.0;
 const CARD_WIDTH_MIN: f32 = 340.0;
@@ -64,8 +65,8 @@ pub fn viewport_id() -> ViewportId {
     ViewportId::from_hash_of("auto-voice-osd")
 }
 
-/// Offset from the overlay window's top-left corner to the top-left corner of the card, for the
-/// width the card has while listening. Anchoring uses this so the caret ends up beside the card.
+/// Offset from the overlay window's top-left corner to the top-left corner of the card while
+/// listening.
 pub fn card_inset() -> Vec2 {
     Vec2::new((CANVAS.x - CARD_WIDTH_LIVE) * 0.5, CARD_TOP)
 }
@@ -75,8 +76,10 @@ pub enum OsdPhase {
     Hidden,
     /// Hotkey held, microphone open.
     Listening,
-    /// Hotkey released, ASR + polish running.
+    /// Hotkey released, speech recognition is running.
     Processing,
+    /// Local language-model polishing is running after ASR has finished.
+    Polishing,
     /// Text was inserted; the card shows it for a moment.
     Done,
     /// Nothing usable to insert, or something went wrong.
@@ -86,6 +89,7 @@ pub enum OsdPhase {
 #[derive(Clone, Debug)]
 pub struct OsdSnapshot {
     pub phase: OsdPhase,
+    pub theme: config::UiTheme,
     pub level: f32,
     pub elapsed: Duration,
     pub changed_at: Instant,
@@ -99,6 +103,7 @@ pub struct OsdSnapshot {
 
 struct OsdState {
     phase: OsdPhase,
+    theme: config::UiTheme,
     level: f32,
     levels: VecDeque<f32>,
     last_level_at: Instant,
@@ -118,6 +123,7 @@ impl Default for OsdState {
     fn default() -> Self {
         Self {
             phase: OsdPhase::Hidden,
+            theme: config::UiTheme::DeepSeaAurora,
             level: 0.0,
             levels: VecDeque::from(vec![0.0; WAVE_SLOTS]),
             last_level_at: Instant::now(),
@@ -154,6 +160,18 @@ impl OsdHandle {
         context.request_repaint_of(viewport_id());
     }
 
+    /// Keep the detached native overlay in sync with the settings window theme.
+    pub fn set_theme(&self, theme: config::UiTheme) {
+        let mut state = self.lock_state();
+        if state.theme == theme {
+            return;
+        }
+        state.theme = theme;
+        if let Some(context) = &state.context {
+            context.request_repaint_of(viewport_id());
+        }
+    }
+
     /// Label shown under the title while listening, e.g. `"Caps Lock"`.
     pub fn set_hotkey_label(&self, label: impl Into<String>) {
         self.lock_state().hotkey = label.into();
@@ -187,7 +205,10 @@ impl OsdHandle {
     pub fn set_partial(&self, text: &str) {
         let text = text.trim();
         let mut state = self.lock_state();
-        if !matches!(state.phase, OsdPhase::Listening | OsdPhase::Processing) {
+        if !matches!(
+            state.phase,
+            OsdPhase::Listening | OsdPhase::Processing | OsdPhase::Polishing
+        ) {
             return;
         }
         if state.partial == text {
@@ -206,6 +227,18 @@ impl OsdHandle {
                 state.elapsed = now.saturating_duration_since(started);
             }
             state.phase = OsdPhase::Processing;
+            state.level = 0.0;
+            state.changed_at = now;
+        });
+    }
+
+    pub fn set_polishing(&self) {
+        let now = Instant::now();
+        self.update(|state| {
+            if let Some(started) = state.recording_started.take() {
+                state.elapsed = now.saturating_duration_since(started);
+            }
+            state.phase = OsdPhase::Polishing;
             state.level = 0.0;
             state.changed_at = now;
         });
@@ -289,6 +322,7 @@ impl OsdHandle {
             .map_or(state.elapsed, |started| started.elapsed());
         OsdSnapshot {
             phase: state.phase,
+            theme: state.theme,
             level: state.level,
             elapsed,
             changed_at: state.changed_at,
@@ -491,7 +525,7 @@ pub fn draw(ui: &mut egui::Ui, handle: &OsdHandle) {
 
 fn schedule_repaint(ctx: &egui::Context, snapshot: &OsdSnapshot) {
     match snapshot.phase {
-        OsdPhase::Listening | OsdPhase::Processing => {
+        OsdPhase::Listening | OsdPhase::Processing | OsdPhase::Polishing => {
             ctx.request_repaint_after_for(Duration::from_millis(33), viewport_id());
         }
         OsdPhase::Done | OsdPhase::Notice => {
@@ -666,6 +700,17 @@ impl Content {
                 meter: Meter::Sweep,
                 measured: false,
             },
+            OsdPhase::Polishing => Self {
+                title: "正在优化",
+                body: if snapshot.partial.is_empty() {
+                    "让表达更清晰…".to_owned()
+                } else {
+                    snapshot.partial.clone()
+                },
+                body_muted: snapshot.partial.is_empty(),
+                meter: Meter::Sweep,
+                measured: false,
+            },
             OsdPhase::Done => Self {
                 title: "已插入",
                 body: snapshot.text.clone(),
@@ -780,6 +825,17 @@ fn draw_orb(painter: &egui::Painter, center: Pos2, snapshot: &OsdSnapshot, accen
                 accent,
             );
         }
+        OsdPhase::Polishing => {
+            glow(13.0, 0.28);
+            draw_arc(
+                painter,
+                center,
+                10.0,
+                snapshot.changed_at.elapsed().as_secs_f32() * -3.0,
+                accent,
+            );
+            painter.circle_filled(center, 3.0, accent);
+        }
         OsdPhase::Done => {
             glow(13.0, 0.26);
             let stroke = Stroke::new(2.2, accent);
@@ -866,9 +922,6 @@ fn draw_meter(
 }
 
 /// Scrolling history of the microphone level: what was actually heard, not a canned animation.
-///
-/// `pub(crate)` so the isolated Wayland OSD process ([`crate::wayland_osd`]) can paint the same
-/// waveform from the level history it receives over IPC, instead of maintaining a second copy.
 pub(crate) fn draw_waveform(painter: &egui::Painter, rect: Rect, levels: &[f32], color: Color32) {
     if rect.width() <= 0.0 || levels.is_empty() {
         return;
@@ -930,6 +983,7 @@ impl Palette {
             OsdPhase::Hidden => Color32::from_rgb(112, 126, 151),
             OsdPhase::Listening => Color32::from_rgb(255, 92, 116),
             OsdPhase::Processing => Color32::from_rgb(104, 156, 255),
+            OsdPhase::Polishing => Color32::from_rgb(88, 214, 231),
             OsdPhase::Done => Color32::from_rgb(67, 211, 151),
             OsdPhase::Notice if snapshot.warn => Color32::from_rgb(255, 122, 122),
             OsdPhase::Notice => Color32::from_rgb(235, 176, 91),
@@ -937,22 +991,84 @@ impl Palette {
         Self {
             // Translucent enough to sit in the page rather than on top of it, opaque enough to
             // keep the transcript readable over anything.
-            surface: if compositing.blends() {
+            surface: surface_color(snapshot.theme, compositing),
+            border: accent.gamma_multiply(0.34),
+            rim: rim_color(snapshot.theme, compositing),
+            accent,
+            title: title_color(snapshot.theme),
+            text: text_color(snapshot.theme),
+            muted: muted_color(snapshot.theme),
+        }
+    }
+}
+
+fn surface_color(theme: config::UiTheme, compositing: OverlayCompositing) -> Color32 {
+    match theme {
+        config::UiTheme::DeepSeaAurora => {
+            if compositing.blends() {
                 Color32::from_rgba_unmultiplied(17, 21, 30, 224)
             } else {
                 Color32::from_rgb(19, 24, 34)
-            },
-            border: accent.gamma_multiply(0.34),
-            rim: if compositing.blends() {
+            }
+        }
+        config::UiTheme::MorningPorcelain => {
+            if compositing.blends() {
+                Color32::from_rgba_unmultiplied(252, 252, 254, 236)
+            } else {
+                Color32::from_rgb(255, 255, 255)
+            }
+        }
+        config::UiTheme::GraphiteFocus => Color32::from_rgba_unmultiplied(37, 39, 44, 236),
+    }
+}
+
+fn rim_color(theme: config::UiTheme, compositing: OverlayCompositing) -> Color32 {
+    match theme {
+        config::UiTheme::DeepSeaAurora => {
+            if compositing.blends() {
                 Color32::from_white_alpha(26)
             } else {
                 Color32::from_rgb(48, 56, 72)
-            },
-            accent,
-            title: Color32::from_rgb(176, 186, 204),
-            text: Color32::from_rgb(245, 247, 250),
-            muted: Color32::from_rgb(139, 150, 170),
+            }
         }
+        config::UiTheme::MorningPorcelain => {
+            if compositing.blends() {
+                Color32::from_black_alpha(16)
+            } else {
+                Color32::from_rgb(218, 224, 235)
+            }
+        }
+        config::UiTheme::GraphiteFocus => {
+            if compositing.blends() {
+                Color32::from_white_alpha(24)
+            } else {
+                Color32::from_rgb(61, 64, 72)
+            }
+        }
+    }
+}
+
+fn title_color(theme: config::UiTheme) -> Color32 {
+    match theme {
+        config::UiTheme::DeepSeaAurora => Color32::from_rgb(176, 186, 204),
+        config::UiTheme::MorningPorcelain => Color32::from_rgb(78, 89, 110),
+        config::UiTheme::GraphiteFocus => Color32::from_rgb(180, 188, 202),
+    }
+}
+
+fn text_color(theme: config::UiTheme) -> Color32 {
+    match theme {
+        config::UiTheme::DeepSeaAurora => Color32::from_rgb(245, 247, 250),
+        config::UiTheme::MorningPorcelain => Color32::from_rgb(25, 32, 45),
+        config::UiTheme::GraphiteFocus => Color32::from_rgb(229, 231, 235),
+    }
+}
+
+fn muted_color(theme: config::UiTheme) -> Color32 {
+    match theme {
+        config::UiTheme::DeepSeaAurora => Color32::from_rgb(139, 150, 170),
+        config::UiTheme::MorningPorcelain => Color32::from_rgb(101, 115, 138),
+        config::UiTheme::GraphiteFocus => Color32::from_rgb(155, 161, 173),
     }
 }
 
@@ -1011,6 +1127,18 @@ mod tests {
         assert_eq!(handle.snapshot().partial, "今天天气");
         handle.set_partial("今天天气不错");
         assert_eq!(handle.snapshot().partial, "今天天气不错");
+    }
+
+    #[test]
+    fn polishing_is_visible_as_a_separate_phase() {
+        let handle = OsdHandle::new();
+        handle.set_recording();
+        handle.set_processing();
+        handle.set_partial("今天的天气");
+        handle.set_polishing();
+        let snapshot = handle.snapshot();
+        assert_eq!(snapshot.phase, OsdPhase::Polishing);
+        assert_eq!(snapshot.partial, "今天的天气");
     }
 
     #[test]

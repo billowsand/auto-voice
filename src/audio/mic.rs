@@ -244,84 +244,15 @@ fn rms_energy(samples: &[f32], channels: usize) -> f32 {
 }
 
 pub fn set_clipboard_pub(text: &str) -> Result<()> {
-    #[cfg(target_os = "linux")]
-    if crate::platform::is_wayland_session() {
-        use anyhow::Context;
-        use std::io::Write;
-
-        let mut child = std::process::Command::new("wl-copy")
-            .args(["--type", "text/plain;charset=utf-8"])
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .context("failed to start wl-copy")?;
-        child
-            .stdin
-            .take()
-            .context("wl-copy stdin is unavailable")?
-            .write_all(text.as_bytes())
-            .context("failed to send text to wl-copy")?;
-        // wl-copy forks a daemon that serves the selection until another client replaces it,
-        // and the daemon inherits our stderr pipe. wait_with_output() reads stderr to EOF
-        // before reaping, which would block for as long as our text stays on the clipboard —
-        // the dictation cycle hangs at "正在转写" and the paste is never sent. Reap the
-        // foreground process as soon as it exits instead, and only read stderr when it
-        // failed: on failure no daemon was forked, so the pipe reaches EOF on its own.
-        let status = child.wait().context("failed to wait for wl-copy")?;
-        if !status.success() {
-            use std::io::Read;
-            let mut stderr = String::new();
-            if let Some(mut pipe) = child.stderr.take() {
-                let _ = pipe.read_to_string(&mut stderr);
-            }
-            anyhow::bail!("wl-copy failed: {}", stderr.trim());
-        }
-        tracing::info!("Clipboard ready through native Wayland wl-copy");
-        return Ok(());
-    }
-
     let mut clipboard = arboard::Clipboard::new()?;
     clipboard.set_text(text)?;
     Ok(())
 }
 
-/// Give the clipboard a moment to actually be ready to serve `expected` before a synthetic paste
-/// is dispatched.
-///
-/// On Wayland, `wl-copy` (see [`set_clipboard_pub`]) forks a background daemon that answers
-/// `wl_data_device` selection requests; a fixed delay was previously used to guess when it was
-/// up, and a slow start could race the target application's own request, which then saw stale or
-/// empty clipboard content — a paste that silently inserted nothing. This instead round-trips
-/// through `wl-paste`, the same protocol path a real paste would take, and returns as soon as it
-/// reads back what was just set. Falls back to a fixed wait when `wl-paste` is missing or the
-/// session is not Wayland, where clipboard writes are effectively synchronous.
-pub fn wait_clipboard_ready_pub(expected: &str) {
-    #[cfg(target_os = "linux")]
-    if crate::platform::is_wayland_session() {
-        let deadline = std::time::Instant::now() + Duration::from_millis(300);
-        loop {
-            match std::process::Command::new("wl-paste")
-                .args(["--no-newline", "--type", "text/plain;charset=utf-8"])
-                .output()
-            {
-                Ok(output)
-                    if output.status.success()
-                        && String::from_utf8_lossy(&output.stdout) == expected =>
-                {
-                    return;
-                }
-                // wl-paste isn't installed: nothing to poll for, so give the daemon a fixed
-                // head start instead of busy-spawning a command that can never succeed.
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
-                _ => {}
-            }
-            if std::time::Instant::now() >= deadline {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(30));
-        }
-    }
+/// Give the clipboard a moment to actually be ready to serve the text before a synthetic paste
+/// is dispatched. Windows clipboard writes are effectively synchronous, but the owning
+/// application still needs a beat to answer the first `WM_RENDERFORMAT`.
+pub fn wait_clipboard_ready_pub() {
     std::thread::sleep(Duration::from_millis(120));
 }
 

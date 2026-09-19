@@ -73,7 +73,8 @@ jobs:
           $package = "auto-voice-v$env:VERSION-windows-x86_64"
           $dir = Join-Path dist $package
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          Copy-Item -Path target/release/auto-voice.exe, config.toml, README.md, LICENSE, CHANGELOG.md -Destination $dir
+          # Do not ship the maintainer's local config: it can contain absolute model paths.
+          Copy-Item -Path target/release/auto-voice.exe, README.md, LICENSE, CHANGELOG.md -Destination $dir
           Compress-Archive -Path $dir -DestinationPath "dist/$package.zip" -CompressionLevel Optimal
           $hash = (Get-FileHash "dist/$package.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $package.zip" | Set-Content -NoNewline -Encoding ascii "dist/$package.zip.sha256"

@@ -1,6 +1,6 @@
 [package]
 name = "auto-voice"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["billowsand"]
 description = "Windows 本地语音转文字工具，支持 PTT、音频文件转录、说话人分离和 LLM 文本纠错"
@@ -37,13 +37,11 @@ toml        = "0.8"
 directories = "6"
 skrifa = "0.42.1"
 
-# 跨平台桌面 UI。Glow 比默认 WGPU 依赖更轻，适合常驻托盘应用。
+# 桌面 UI。Glow 比默认 WGPU 依赖更轻，适合常驻托盘应用。
 eframe = { version = "0.35", default-features = false, features = [
     "accesskit",
     "default_fonts",
     "glow",
-    "wayland",
-    "x11",
 ] }
 
 # 音频解码 (MP3/WAV/FLAC/OGG/M4A/MKV/AIFF/…)
@@ -84,14 +82,8 @@ enigo = "0.2"
 # 系统托盘
 tray-icon = "0.17"
 
-# sherpa-onnx is the cross-platform ASR runtime. Keep it in the common
-# dependency set; placing it below a target table makes it Windows-only.
+# ASR 运行时
 sherpa-onnx = { version = "1", default-features = false }
-
-# tray-icon's Linux backend creates GTK menu widgets. GTK must be initialized
-# explicitly before those widgets are constructed.
-[target.'cfg(target_os = "linux")'.dependencies]
-gtk = "0.18"
 
 # Windows 消息泵（托盘需要）
 [target.'cfg(windows)'.dependencies]

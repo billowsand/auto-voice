@@ -30,11 +30,6 @@ pub fn run_tray(cfg: TrayConfig) -> Result<()> {
     #[cfg(windows)]
     hide_console_window();
 
-    // tray-icon uses GTK menus on Linux but does not initialize GTK itself.
-    // Do this on the main thread before eframe's callback constructs the menu.
-    #[cfg(target_os = "linux")]
-    gtk::init().map_err(|error| anyhow::anyhow!("GTK initialization failed: {error}"))?;
-
     let live = cfg.runtime.live();
     let ptt_key_label = describe_ptt_key(&live.ptt_key);
 
@@ -60,12 +55,7 @@ pub fn run_tray(cfg: TrayConfig) -> Result<()> {
             }
 
             tracing::info!("PTT active");
-            #[cfg(target_os = "linux")]
-            let desktop_osd = (!crate::platform::is_wayland_session()).then_some(osd_handle);
-            #[cfg(not(target_os = "linux"))]
-            let desktop_osd = Some(osd_handle);
-
-            if let Err(e) = ptt::run_ptt(&runtime, desktop_osd) {
+            if let Err(e) = ptt::run_ptt(&runtime, Some(osd_handle)) {
                 tracing::error!("PTT error: {}", e);
             }
         });

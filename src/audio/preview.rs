@@ -44,8 +44,8 @@ pub struct LivePreview {
 
 impl LivePreview {
     /// `on_partial` is called with the running transcript from a background thread each time a
-    /// preview pass finishes. It is generic rather than tied to [`crate::osd::OsdHandle`] so the
-    /// isolated Wayland OSD process can wire it to an IPC send instead.
+    /// preview pass finishes. It is generic rather than tied to [`crate::osd::OsdHandle`] so
+    /// tests (and any future consumer) can observe the stream without an overlay.
     pub fn start(
         engine: Arc<AsrEngine>,
         on_partial: impl Fn(String) + Send + 'static,

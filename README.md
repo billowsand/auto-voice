@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**面向 Windows、macOS 与 Linux 的本地语音转文字助手**
+**面向 Windows 的本地语音转文字助手**
 
 按住快捷键说话，松开即转录并粘贴；也可以将会议录音转换为带说话人标记的 Markdown。
 
@@ -10,7 +10,7 @@
 [![Release](https://img.shields.io/github/v/release/billowsand/auto-voice?display_name=tag&sort=semver)](https://github.com/billowsand/auto-voice/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.92%2B-dea584?logo=rust)](https://www.rust-lang.org/)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D4)](#平台兼容性)
+[![Platform](https://img.shields.io/badge/platform-Windows-0078D4)](#平台兼容性)
 
 [快速开始](#快速开始) · [配置](#配置) · [命令行](#命令行使用) · [参与贡献](CONTRIBUTING.md)
 
@@ -19,7 +19,7 @@
 </div>
 
 > [!IMPORTANT]
-> Windows 是当前主要发布平台；macOS 与 Linux 已纳入构建验证。语音模型需要单独下载，不包含在 Release 压缩包中。
+> 本项目专注于 Windows 10/11。语音模型需要单独下载，不包含在 Release 压缩包中。
 
 ## 为什么使用 auto-voice
 
@@ -59,7 +59,7 @@ models/
 
 首次运行会弹出引导窗口：选一个按住说话的快捷键，确认模型与文本优化后即可开始使用，窗口会收进系统托盘。之后每次启动都直接静默驻留托盘，不再打扰。
 
-按住配置的 `ptt_key` 讲话时，光标附近会弹出一张半透明卡片：左边是实时音量波形，下面是**已经识别出来的文字**——不用等说完就能看到自己在说什么。松开后，本地识别与 AI 整理接手，最终文本自动粘贴到当前输入框，卡片展示一下就淡出。设置中心里的改动即时生效，换模型也只是后台重新加载，都不需要重启程序。
+按住配置的 `ptt_key` 讲话时，当前屏幕中央会弹出一张半透明卡片：左边是实时音量波形，下面是**已经识别出来的文字**——不用等说完就能看到自己在说什么。松开后，本地识别与 AI 整理接手，最终文本自动粘贴到当前输入框，卡片展示一下就淡出。设置中心里的改动即时生效，换模型也只是后台重新加载，都不需要重启程序。
 
 ## 功能概览
 
@@ -222,7 +222,7 @@ hr_rule_fsts = "models/hr/replace.fst"
 
 ## 从源码构建
 
-要求：Rust 1.92 或更高版本。Linux 还需要 ALSA、GTK3、AppIndicator、X11/Wayland 对应的开发包。
+要求：Rust 1.92 或更高版本，以及 Windows 10/11。
 
 ```powershell
 git clone https://github.com/billowsand/auto-voice.git
@@ -234,16 +234,14 @@ cargo build --release --locked
 
 ## 平台兼容性
 
-- **Windows 10/11**：支持全局 PTT、自动粘贴、托盘与精确定位 OSD。
-- **macOS**：支持相同核心功能；全局 PTT 和自动粘贴需要辅助功能/输入监控权限，粘贴使用 Command+V。
-- **Linux X11**：支持全局 PTT；托盘和录音依赖发行版提供 GTK/AppIndicator 与 ALSA/PipeWire 组件。
-- **Linux Wayland**：设置、录音和转录核心可运行；全局 PTT 等待 XDG GlobalShortcuts Portal 后端，OSD 位置由合成器决定。
+- **Windows 10/11**：支持全局 PTT、自动粘贴、托盘与精确定位 OSD（DWM 每像素 alpha 合成）。
+- 其它平台不在支持范围内：构建、CI 与 OSD 实现均只针对 Win32。
 
-详细设计和降级策略见 [跨平台 UI 设计](docs/cross-platform-ui-design.md)。
+OSD 定位与 DPI 细节见 [DPI 指南](docs/dpi-guide.md)。
 
 ## 项目状态与限制
 
-- 当前预构建 Release 仍以 Windows 为主，macOS/Linux 打包与权限引导仍在完善。
+- 仅支持 Windows 10/11；不提供 macOS / Linux 构建。
 - 模型文件体积较大，需要用户自行下载并遵守对应模型许可证。
 - 说话人分离会显著增加模型加载时间和内存占用。
 - LLM 纠错是可选功能，默认可通过 `no_llm = true` 完全关闭。

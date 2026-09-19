@@ -16,7 +16,8 @@ pub struct ConfigFile {
     /// Set by the first-run wizard. Until it is true the wizard takes over the window.
     pub setup_done: Option<bool>,
 
-    /// Pop the overlay next to the text caret of the focused app instead of the screen edge.
+    /// Legacy compatibility flag. The overlay is now always centred on the active monitor.
+    /// Older config files may still contain this key, but it no longer changes placement.
     pub overlay_follow_caret: Option<bool>,
 
     /// Show the transcript building up on the overlay while the hotkey is still held. Costs a
@@ -28,6 +29,10 @@ pub struct ConfigFile {
 
     /// System UI font families, in fallback order. The first font containing a glyph wins.
     pub ui_font_families: Option<Vec<String>>,
+
+    /// Visual theme for the settings window. Supported values are `deep-sea-aurora`,
+    /// `morning-porcelain`, and `graphite-focus`.
+    pub ui_theme: Option<String>,
 
     /// ASR 后端选择: "sense-voice"（默认）或 "funasr-nano"
     pub asr_backend: Option<String>,
@@ -74,6 +79,15 @@ pub struct ConfigFile {
 }
 
 impl ConfigFile {
+    /// Resolve the configured visual theme, falling back to the default when the value is
+    /// missing or comes from an older/hand-edited config file.
+    pub fn ui_theme(&self) -> UiTheme {
+        self.ui_theme
+            .as_deref()
+            .and_then(UiTheme::parse)
+            .unwrap_or(UiTheme::DeepSeaAurora)
+    }
+
     pub fn load() -> Self {
         if let Ok(cfg) = Self::try_load("config.toml") {
             return cfg;
@@ -246,5 +260,62 @@ mod tests {
         let decoded: ConfigFile = toml::from_str(&text).expect("config should deserialize");
 
         assert_eq!(decoded.ui_font_families, config.ui_font_families);
+    }
+
+    #[test]
+    fn ui_theme_round_trips_and_unknown_values_use_the_default() {
+        let config = ConfigFile {
+            ui_theme: Some("morning-porcelain".to_owned()),
+            ..ConfigFile::default()
+        };
+        let text = toml::to_string(&config).expect("config should serialize");
+        let decoded: ConfigFile = toml::from_str(&text).expect("config should deserialize");
+        assert_eq!(decoded.ui_theme(), UiTheme::MorningPorcelain);
+
+        let unknown = ConfigFile {
+            ui_theme: Some("future-theme".to_owned()),
+            ..ConfigFile::default()
+        };
+        assert_eq!(unknown.ui_theme(), UiTheme::DeepSeaAurora);
+    }
+}
+
+/// Themes are persisted as stable, human-readable TOML strings so future themes can be added
+/// without breaking existing configurations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UiTheme {
+    DeepSeaAurora,
+    MorningPorcelain,
+    GraphiteFocus,
+}
+
+impl UiTheme {
+    pub const ALL: [(Self, &'static str, &'static str); 3] = [
+        (Self::DeepSeaAurora, "deep-sea-aurora", "深海极光"),
+        (Self::MorningPorcelain, "morning-porcelain", "晨雾白瓷"),
+        (Self::GraphiteFocus, "graphite-focus", "石墨专注"),
+    ];
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .find(|(_, key, _)| *key == value)
+            .map(|(theme, ..)| *theme)
+    }
+
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::DeepSeaAurora => "deep-sea-aurora",
+            Self::MorningPorcelain => "morning-porcelain",
+            Self::GraphiteFocus => "graphite-focus",
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::DeepSeaAurora => "深海极光",
+            Self::MorningPorcelain => "晨雾白瓷",
+            Self::GraphiteFocus => "石墨专注",
+        }
     }
 }
